@@ -88,7 +88,7 @@ snapshot_download(cache_dir=cache_dir,
 ### Train
 
 ```bash
-python scripts/train.sh
+bash scripts/train.sh
 ```
 
 You can replace the variables in the script with your own before running.
