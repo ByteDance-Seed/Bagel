@@ -110,6 +110,12 @@ snapshot_download(cache_dir=cache_dir,
 
 3️⃣  Go to [`inference.ipynb`](inference.ipynb) to start playing with BAGEL!
 
+4️⃣ Use Gradio WebUI to start playing with BAGEL!
+```bash
+pip install gradio
+python app.py
+```
+
 ## 🔥 Train & Eval
 
 ### Train
