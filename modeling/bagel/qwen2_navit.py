@@ -570,8 +570,8 @@ class PackedAttentionMoT(Qwen2Attention):
             merged_value_states = packed_value_states
             key_values_lens = query_lens
 
-        cu_seqlens_q = torch.nn.functional.pad(torch.cumsum(query_lens, dim=0), (1, 0))
-        cu_seqlens_k = torch.nn.functional.pad(torch.cumsum(key_values_lens, dim=0), (1, 0))
+        cu_seqlens_q = torch.nn.functional.pad(torch.cumsum(query_lens, dim=0), (1, 0)).to('cuda')
+        cu_seqlens_k = torch.nn.functional.pad(torch.cumsum(key_values_lens, dim=0), (1, 0)).to('cuda')
 
         packed_attn_output = flash_attn_varlen_func(
             q=packed_query_states,
@@ -1140,13 +1140,13 @@ class Qwen2ForCausalLM(Qwen2PreTrainedModel):
     ) -> BaseNavitOutputWithPast:
 
         outputs = self.model(
-            packed_query_sequence=packed_query_sequence,
-            query_lens=query_lens,
-            packed_query_position_ids=packed_query_position_ids,
-            packed_query_indexes=packed_query_indexes,
+            packed_query_sequence=packed_query_sequence.to('cuda'),
+            query_lens=query_lens.to('cuda'),
+            packed_query_position_ids=packed_query_position_ids.to('cuda'),
+            packed_query_indexes=packed_query_indexes.to('cuda'),
             past_key_values=past_key_values,
-            key_values_lens=key_values_lens,
-            packed_key_value_indexes=packed_key_value_indexes,
+            key_values_lens=key_values_lens.to('cuda') if key_values_lens is not None else None,
+            packed_key_value_indexes=packed_key_value_indexes.to('cuda') if packed_key_value_indexes is not None else None,
             update_past_key_values=update_past_key_values,
             is_causal=is_causal,
             mode=mode,

@@ -4,6 +4,8 @@
 import copy
 from typing import List, Tuple, Optional
 
+from tqdm import tqdm
+
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -83,12 +85,15 @@ class Bagel(PreTrainedModel):
             self.vit_hidden_size = config.vit_config.hidden_size
             self.connector = MLPconnector(self.vit_hidden_size, self.hidden_size, config.connector_act)
             self.vit_pos_embed = PositionEmbedding(self.vit_max_num_patch_per_side, self.hidden_size)
+        else:
+            self.vit_model = None
 
         if config.interpolate_pos:
             self.get_flattened_position_ids = get_flattened_position_ids_interpolate
         else:
             self.get_flattened_position_ids = get_flattened_position_ids_extrapolate
-
+        
+        self.cpu_offloading = False
         self.config = config
         self._init_weights()
 
@@ -96,6 +101,50 @@ class Bagel(PreTrainedModel):
         if self.config.visual_gen:
             nn.init.constant_(self.llm2vae.weight, 0)
             nn.init.constant_(self.llm2vae.bias, 0)
+            
+    def enable_sequential_offloading(self, execution_device: str = "cuda"):
+        from accelerate import cpu_offload
+        
+        self.cpu_offloading = True 
+        
+        lang_model_layers = self.language_model.model.layers
+        self.language_model.model.layers = nn.ModuleList()
+        
+        
+        if self.vit_model:
+            vit_model_layers = self.vit_model.vision_model.encoder.layers 
+            self.vit_model.vision_model.encoder.layers = nn.ModuleList()
+        else:
+            vit_model_layers = None
+            
+            
+        if self.config.visual_gen:
+            self.time_embedder = self.time_embedder.to(execution_device)
+            self.vae2llm = self.vae2llm.to(execution_device)
+            self.llm2vae = self.llm2vae.to(execution_device)
+            self.latent_pos_embed = self.latent_pos_embed.to(execution_device)
+            
+        if self.config.visual_und:
+            self.vit_model = self.vit_model.to(execution_device)
+            self.connector = self.connector.to(execution_device)
+            self.vit_pos_embed = self.vit_pos_embed.to(execution_device)
+        
+        self.to(execution_device)
+        self.language_model.to(execution_device)
+        self.language_model.model.to(execution_device)
+        if self.vit_model:
+            self.vit_model.to(execution_device) 
+            self.vit_model.vision_model.to(execution_device)
+            self.vit_model.vision_model.encoder.to(execution_device)
+        
+        self.language_model.model.layers = lang_model_layers
+        if vit_model_layers:
+            self.vit_model.vision_model.encoder.layers = vit_model_layers
+        
+        cpu_offload(self.language_model.model, offload_buffers=False)
+        
+        if vit_model_layers is not None:
+            cpu_offload(self.vit_model.vision_model.encoder, offload_buffers=False)
 
     def forward(
         self,
@@ -259,6 +308,9 @@ class Bagel(PreTrainedModel):
             "packed_key_value_indexes": torch.tensor(packed_key_value_indexes, dtype=torch.long),
             "key_values_lens": torch.tensor(curr_kvlens, dtype=torch.int),
         }
+        
+        if self.cpu_offloading:
+            generation_input = {k: v.to("cuda") for k, v in generation_input.items()}
 
         return generation_input, newlens, new_rope
 
@@ -354,6 +406,9 @@ class Bagel(PreTrainedModel):
             "packed_key_value_indexes": torch.tensor(packed_key_value_indexes, dtype=torch.long),
             "key_values_lens": torch.tensor(curr_kvlens, dtype=torch.int),
         }
+        
+        if self.cpu_offloading:
+            generation_input = {k: v.to("cuda") for k, v in generation_input.items()}
 
         return generation_input, newlens, new_rope
 
@@ -380,14 +435,17 @@ class Bagel(PreTrainedModel):
         cu_seqlens = torch.nn.functional.pad(torch.cumsum(vit_token_seqlens, dim=0), (1, 0))
         cu_seqlens = cu_seqlens.to(torch.int32)
         max_seqlen = torch.max(vit_token_seqlens).item()
+
         packed_vit_token_embed = self.vit_model(
-            packed_pixel_values=packed_vit_tokens, 
-            packed_flattened_position_ids=packed_vit_position_ids,
-            cu_seqlens=cu_seqlens,
+            packed_pixel_values=packed_vit_tokens.to('cuda'), 
+            packed_flattened_position_ids=packed_vit_position_ids.to('cuda'),
+            cu_seqlens=cu_seqlens.to('cuda'),
             max_seqlen=max_seqlen,
         )
         packed_vit_token_embed = self.connector(packed_vit_token_embed)
-        pos_emb = self.vit_pos_embed(packed_vit_position_ids)
+        # ensure positional embeddings are on the same device as token embeddings
+        device = packed_vit_token_embed.device
+        pos_emb = self.vit_pos_embed(packed_vit_position_ids.to(device))
         packed_vit_token_embed = packed_vit_token_embed + pos_emb
         if packed_vit_token_embed.dtype != packed_sequence.dtype:
             packed_vit_token_embed = packed_vit_token_embed.to(packed_sequence.dtype)
@@ -483,6 +541,9 @@ class Bagel(PreTrainedModel):
             "packed_key_value_indexes": torch.tensor(packed_key_value_indexes, dtype=torch.long),
             "key_values_lens": torch.tensor(curr_kvlens, dtype=torch.int),
         }
+        
+        if self.cpu_offloading:
+            generation_input = {k: v.to("cuda") if hasattr(v, 'to') else v for k, v in generation_input.items()}
 
         return generation_input, newlens, new_rope
 
@@ -603,6 +664,9 @@ class Bagel(PreTrainedModel):
             "packed_indexes": torch.tensor(packed_indexes, dtype=torch.long),
             "packed_key_value_indexes": torch.tensor(packed_key_value_indexes, dtype=torch.long),
         }
+        
+        if self.cpu_offloading:
+            generation_input = {k: v.to("cuda") for k, v in generation_input.items()}
 
         return generation_input
 
@@ -766,8 +830,8 @@ class Bagel(PreTrainedModel):
 
         assert timestep.unique().shape[0] == 1
         packed_pos_embed = self.latent_pos_embed(packed_vae_position_ids)
-        packed_timestep_embeds = self.time_embedder(timestep)
-        x_t = self.vae2llm(x_t) + packed_timestep_embeds + packed_pos_embed
+        packed_timestep_embeds = self.time_embedder(timestep.to('cuda'))
+        x_t = self.vae2llm(x_t.to('cuda')) + packed_timestep_embeds + packed_pos_embed
         if x_t.dtype != packed_sequence.dtype:
             x_t = x_t.to(packed_sequence.dtype)
         packed_sequence[packed_vae_token_indexes] = x_t

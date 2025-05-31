@@ -230,11 +230,11 @@ class SiglipFlashAttention2(SiglipAttention):
             key_states = torch.cat([kh, kw], dim=-1)
 
         attn_output = flash_attn_varlen_func(
-            query_states.to(torch.bfloat16),
-            key_states.to(torch.bfloat16),
-            value_states.to(torch.bfloat16),
-            cu_seqlens_q=cu_seqlens,
-            cu_seqlens_k=cu_seqlens,
+            query_states.to('cuda', torch.bfloat16),
+            key_states.to('cuda', torch.bfloat16),
+            value_states.to('cuda', torch.bfloat16),
+            cu_seqlens_q=cu_seqlens.to('cuda'),
+            cu_seqlens_k=cu_seqlens.to('cuda'),
             max_seqlen_q=max_seqlen,
             max_seqlen_k=max_seqlen,
             causal=False,
@@ -290,12 +290,12 @@ class SiglipEncoderLayer(nn.Module):
             cos_w=cos_w,
             sin_w=sin_w
         )
-        hidden_states = residual + hidden_states
+        hidden_states = residual + hidden_states.to(device=residual.device, dtype=residual.dtype)
 
         residual = hidden_states
         hidden_states = self.layer_norm2(hidden_states)
         hidden_states = self.mlp(hidden_states)
-        hidden_states = residual + hidden_states
+        hidden_states = residual + hidden_states.to(device=residual.device, dtype=residual.dtype)
 
         return hidden_states
 
@@ -319,7 +319,12 @@ class SiglipEncoder(nn.Module):
         sin_w: torch.Tensor = None,
     ) -> torch.Tensor:
 
-        hidden_states = inputs_embeds
+        hidden_states = inputs_embeds.to('cuda', torch.bfloat16)
+        cu_seqlens = cu_seqlens.to('cuda', torch.int32)
+        cos_h = cos_h.to('cuda', torch.bfloat16) if cos_h is not None else None
+        sin_h = sin_h.to('cuda', torch.bfloat16) if sin_h is not None else None
+        cos_w = cos_w.to('cuda', torch.bfloat16) if cos_w is not None else None
+        sin_w = sin_w.to('cuda', torch.bfloat16) if sin_w is not None else None
         for encoder_layer in self.layers:
             hidden_states = encoder_layer(hidden_states, cu_seqlens, max_seqlen,
                                           cos_h=cos_h, sin_h=sin_h, cos_w=cos_w, sin_w=sin_w)
@@ -352,7 +357,12 @@ class SiglipVisionTransformer(nn.Module):
         hidden_states = self.embeddings(
             packed_pixel_values=packed_pixel_values, 
             packed_flattened_position_ids=packed_flattened_position_ids
-        )
+        ).to('cuda')
+        
+        packed_pixel_values = packed_pixel_values.to('cuda')
+        cu_seqlens = cu_seqlens.to('cuda')
+        
+        packed_flattened_position_ids = packed_flattened_position_ids.to('cuda')
 
         extra_inputs = {}
         if self.config.rope:
@@ -395,8 +405,8 @@ class SiglipVisionModel(SiglipPreTrainedModel):
     ) -> torch.Tensor:
 
         return self.vision_model(
-            packed_pixel_values=packed_pixel_values,
-            packed_flattened_position_ids=packed_flattened_position_ids,
-            cu_seqlens=cu_seqlens,
+            packed_pixel_values=packed_pixel_values.to('cuda'),
+            packed_flattened_position_ids=packed_flattened_position_ids.to('cuda'),
+            cu_seqlens=cu_seqlens.to('cuda'),
             max_seqlen=max_seqlen,
         )
