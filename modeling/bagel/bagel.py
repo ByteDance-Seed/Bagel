@@ -388,6 +388,8 @@ class Bagel(PreTrainedModel):
         )
         packed_vit_token_embed = self.connector(packed_vit_token_embed)
         pos_emb = self.vit_pos_embed(packed_vit_position_ids)
+        if pos_emb.dtype == torch.float8_e4m3fn:
+            pos_emb = pos_emb.to(packed_vit_token_embed.dtype)
         packed_vit_token_embed = packed_vit_token_embed + pos_emb
         if packed_vit_token_embed.dtype != packed_sequence.dtype:
             packed_vit_token_embed = packed_vit_token_embed.to(packed_sequence.dtype)
@@ -519,6 +521,8 @@ class Bagel(PreTrainedModel):
         packed_latent = torch.cat(packed_latent, dim=0)
         packed_pos_embed = self.latent_pos_embed(packed_vae_position_ids)
         packed_timestep_embeds = self.time_embedder(packed_timesteps)
+        if packed_pos_embed.dtype != packed_timestep_embeds.dtype:
+            packed_pos_embed = packed_pos_embed.to(packed_timestep_embeds.dtype)
         packed_latent = self.vae2llm(packed_latent) + packed_timestep_embeds + packed_pos_embed
         if packed_latent.dtype != packed_sequence.dtype:
             packed_latent = packed_latent.to(packed_sequence.dtype)
@@ -767,6 +771,8 @@ class Bagel(PreTrainedModel):
         assert timestep.unique().shape[0] == 1
         packed_pos_embed = self.latent_pos_embed(packed_vae_position_ids)
         packed_timestep_embeds = self.time_embedder(timestep)
+        if packed_pos_embed.dtype == torch.float8_e4m3fn:
+            packed_pos_embed = packed_pos_embed.to(packed_timestep_embeds.dtype)
         x_t = self.vae2llm(x_t) + packed_timestep_embeds + packed_pos_embed
         if x_t.dtype != packed_sequence.dtype:
             x_t = x_t.to(packed_sequence.dtype)
