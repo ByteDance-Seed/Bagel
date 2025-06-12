@@ -59,6 +59,7 @@ class PackedDataset(torch.utils.data.IterableDataset):
         interpolate_pos=False,
         use_flex=False,
         data_status=None,
+        experiment_name=None,
     ):
         super().__init__()
         self.expected_num_tokens = expected_num_tokens
@@ -71,6 +72,7 @@ class PackedDataset(torch.utils.data.IterableDataset):
         self.world_size = world_size
         self.num_workers = num_workers
         self.use_flex = use_flex
+        self.experiment_name = experiment_name
         for k, v in special_tokens.items():
             setattr(self, k, v)
 
@@ -92,6 +94,7 @@ class PackedDataset(torch.utils.data.IterableDataset):
         datasets = []
         is_mandatory = []
         grouped_weights = []
+
         for grouped_dataset_name, dataset_args in datasets_metainfo.items():
             is_mandatory.append(dataset_args.pop('is_mandatory', False))
             grouped_weights.append(dataset_args.pop('weight', 0.0))
@@ -135,7 +138,7 @@ class PackedDataset(torch.utils.data.IterableDataset):
                         dataset_args['jsonl_path_list'] = [meta_info['jsonl_path']]
                     else:
                         dataset_args['jsonl_path_list'].append(meta_info['jsonl_path'])
-
+            
             resume_data_status = dataset_args.pop('resume_data_status', True)
             if data_status is not None and grouped_dataset_name in data_status.keys() and resume_data_status:
                 data_status_per_group = data_status[grouped_dataset_name]
@@ -148,6 +151,7 @@ class PackedDataset(torch.utils.data.IterableDataset):
                 world_size=self.world_size,
                 num_workers=self.num_workers,
                 data_status=data_status_per_group,
+                experiment_name=self.experiment_name,
                 **dataset_args
             )
             datasets.append(dataset)
@@ -246,6 +250,7 @@ class PackedDataset(torch.utils.data.IterableDataset):
         buffer = []
         while True:
             # Ensure at least one sample from each group
+            
             if sequence_status['curr'] == 0:
                 for group_index, group_iter in enumerate(self.dataset_iters):
                     if self.is_mandatory[group_index]:

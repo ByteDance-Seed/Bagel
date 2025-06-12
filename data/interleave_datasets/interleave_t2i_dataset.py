@@ -6,7 +6,8 @@ import pyarrow.parquet as pq
 from ..distributed_iterable_dataset import DistributedIterableDataset
 from ..parquet_utils import get_parquet_data_paths, init_arrow_pf_fs
 
-
+from PIL import Image, ImageDraw
+import os
 class InterleavedBaseIterableDataset(DistributedIterableDataset):
 
     def _init_data(self):
@@ -127,6 +128,30 @@ class InterleavedBaseIterableDataset(DistributedIterableDataset):
                 data['num_tokens'] += width * height // self.transform.stride ** 2
 
         return data
+
+    def save_example_image(self, condition_image, edited_image, edit_instruction, row_idx):
+        border_width = 2
+        text_height = 50  # Space for text at bottom
+
+        condition_image = self.transform.resize_transform(condition_image)
+        edited_image = self.transform.resize_transform(edited_image)
+
+        total_width = condition_image.width + edited_image.width + border_width
+        total_height = max(condition_image.height, edited_image.height) + text_height
+
+        full_example = Image.new('RGB', (total_width, total_height), 'white')
+        
+        # Paste images side by side
+        full_example.paste(condition_image, (0, 0))
+        full_example.paste(edited_image, (condition_image.width + border_width, 0))
+        
+        # Add text at bottom
+        draw = ImageDraw.Draw(full_example)
+        text_y = max(condition_image.height, edited_image.height) + 5
+        draw.text((10, text_y), edit_instruction, fill='black')
+        img_dir = os.path.join("results", self.experiment_name, f"{self.dataset_name}_examples")
+        os.makedirs(img_dir, exist_ok=True)
+        full_example.save(os.path.join(img_dir, f"example_{row_idx}.png"))
 
 
 class ParquetStandardIterableDataset(DistributedIterableDataset):

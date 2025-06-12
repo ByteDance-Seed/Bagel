@@ -28,25 +28,23 @@
 #   weight: 1
 
 
-# simple_edit:
-#   dataset_names:
-#   - simple_edit
-#   image_transform_args:
-#     image_stride: 16
-#     max_image_size: 224
-#     min_image_size: 224
-#   vit_image_transform_args:
-#     image_stride: 14
-#     max_image_size: 512
-#     min_image_size: 224
-#   is_mandatory: true
-#   shuffle_lines: True
-#   shuffle_seed: 0
-#   num_used_data:
-#   - 16656
-#   weight: 1
-
-
+simple_edit:
+  dataset_names:
+  - simple_edit
+  image_transform_args:
+    image_stride: 16
+    max_image_size: 224
+    min_image_size: 224
+  vit_image_transform_args:
+    image_stride: 14
+    max_image_size: 224
+    min_image_size: 224
+  is_mandatory: true
+  shuffle_lines: True
+  shuffle_seed: 0
+  num_used_data:
+  - 16656
+  weight: 0.2
 
 pi_edit:
   dataset_names:
@@ -58,7 +56,7 @@ pi_edit:
     min_image_size: 224
   vit_image_transform_args:
     image_stride: 14
-    max_image_size: 512
+    max_image_size: 224
     min_image_size: 224
   is_mandatory: true
   shuffle_lines: True

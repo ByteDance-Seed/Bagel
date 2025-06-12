@@ -106,7 +106,7 @@ class FSDPCheckpoint:
                 StateDictType.FULL_STATE_DICT,
                 FullStateDictConfig(rank0_only=True, offload_to_cpu=True),
             ):
-                ema_state_dict = ema_model.state_dict()
+                ema_state_dict = {k: v.to(torch.bfloat16) if v.dtype == torch.float32 else v for k, v in ema_model.state_dict().items()}
                 if dist.get_rank() == 0:
                     save_file(ema_state_dict, os.path.join(save_path, "ema.safetensors"))
 
@@ -160,8 +160,11 @@ class FSDPCheckpoint:
             model_state_dict = load_file(model_state_dict_path, device="cpu")
             # NOTE position embeds are fixed sinusoidal embeddings, so we can just pop it off,
             # which makes it easier to adapt to different resolutions.
-            model_state_dict.pop('latent_pos_embed.pos_embed')
-            model_state_dict.pop('vit_pos_embed.pos_embed')
+            try:
+                model_state_dict.pop('latent_pos_embed.pos_embed')
+                model_state_dict.pop('vit_pos_embed.pos_embed')
+            except:
+                pass
             msg = model.load_state_dict(model_state_dict, strict=False)
             logger.info(msg)
             del model_state_dict
@@ -174,8 +177,11 @@ class FSDPCheckpoint:
                 ema_state_dict = load_file(ema_state_dict_path, device="cpu")
                 # NOTE position embeds are fixed sinusoidal embeddings, so we can just pop it off,
                 # which makes it easier to adapt to different resolutions.
-                ema_state_dict.pop('latent_pos_embed.pos_embed')
-                ema_state_dict.pop('vit_pos_embed.pos_embed')
+                try:
+                    ema_state_dict.pop('latent_pos_embed.pos_embed')
+                    ema_state_dict.pop('vit_pos_embed.pos_embed')
+                except:
+                    pass
                 msg = ema_model.load_state_dict(ema_state_dict, strict=False)
                 logger.info(msg)
                 del ema_state_dict
