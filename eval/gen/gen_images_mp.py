@@ -5,7 +5,7 @@ import os
 import json
 import argparse
 from safetensors.torch import load_file
-
+from time import time
 import torch
 import torch.distributed as dist
 from data.data_utils import add_special_tokens
@@ -17,6 +17,7 @@ from modeling.autoencoder import load_ae
 
 from PIL import Image
 from modeling.bagel.qwen2_navit import NaiveCache
+from accelerate import infer_auto_device_map, load_checkpoint_and_dispatch, init_empty_weights
 
 
 def move_generation_input_to_device(generation_input, device):
@@ -56,6 +57,7 @@ def generate_image(prompt, num_timesteps=50, cfg_scale=10.0, cfg_interval=[0, 1.
         image_sizes=[(resolution, resolution)] * num_images, 
         new_token_ids=new_token_ids,
     )
+
     generation_input = move_generation_input_to_device(generation_input, device)
 
     cfg_past_key_values = NaiveCache(gen_model.config.llm_config.num_hidden_layers)
@@ -68,6 +70,9 @@ def generate_image(prompt, num_timesteps=50, cfg_scale=10.0, cfg_interval=[0, 1.
         image_sizes=[(resolution, resolution)] * num_images,
     )
     generation_input_cfg = move_generation_input_to_device(generation_input_cfg, device)
+
+    generation_input = {k: v.to(torch.bfloat16) if v.dtype == torch.float32 else v for k, v in generation_input.items()}
+    generation_input_cfg = {k: v.to(torch.bfloat16) if v.dtype == torch.float32 else v for k, v in generation_input_cfg.items()}
 
     with torch.no_grad():
         with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
@@ -158,11 +163,14 @@ if __name__ == "__main__":
     )
     language_model = Qwen2ForCausalLM(llm_config)
     vit_model = SiglipVisionModel(vit_config)
+
     model = Bagel(language_model, vit_model, config)
     model.vit_model.vision_model.embeddings.convert_conv2d_to_linear(vit_config)
 
     tokenizer = Qwen2Tokenizer.from_pretrained(args.model_path)
     tokenizer, new_token_ids, _ = add_special_tokens(tokenizer)
+
+
 
     model_state_dict_path = os.path.join(args.model_path, "ema.safetensors")
     model_state_dict = load_file(model_state_dict_path, device="cpu")
@@ -171,9 +179,15 @@ if __name__ == "__main__":
         print(msg)
     del model_state_dict
 
-    model = model.to(device).eval()
-    vae_model = vae_model.to(device).eval()
+    model = model.to(device).to(torch.bfloat16).eval()
+    vae_model = vae_model.to(device).to(torch.bfloat16).eval()
     gen_model = model
+    
+    # Count total parameters
+    total_params = sum(p.numel() for p in model.parameters())
+    if rank == 0:
+        print(f"Total parameters: {total_params:,}")
+
 
     cfg_scale = args.cfg_scale
     cfg_interval = [0, 1.0]
@@ -189,7 +203,10 @@ if __name__ == "__main__":
     start = rank * prompts_per_gpu
     end = min(start + prompts_per_gpu, total_metadatas)
     print(f"GPU {rank}: Processing {end - start} prompts (indices {start} to {end - 1})")
+    
 
+    # Set start time for tracking generation progress
+    start_time = time()
     for idx in range(start, end):
         metadata = metadatas[idx]
         outpath = os.path.join(output_dir, f"{idx:0>5}")
@@ -233,6 +250,11 @@ if __name__ == "__main__":
             sample = sample.crop(sample.getbbox())
             sample.save(os.path.join(sample_path, f"{sample_count:05}.png"))
             sample_count += 1
+
+    end_time = time()
+    duration = end_time - start_time
+    print(f"GPU {rank} completed in {duration:.2f} seconds")
+    print(f"Average time per prompt: {duration / (end - start):.2f} seconds")
 
     print(f"GPU {rank} has completed all tasks")
     dist.barrier()
