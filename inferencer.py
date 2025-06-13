@@ -19,6 +19,15 @@ GEN_THINK_SYSTEM_PROMPT = '''You should first think about the planning process i
 The planning process is enclosed within <think> </think> tags, i.e. <think> planning process here </think> image here'''
 
 
+def move_generation_input_to_device(generation_input, device):
+    # Utility to move all tensors in generation_input to device
+    for k, v in generation_input.items():
+        if isinstance(v, torch.Tensor):
+            generation_input[k] = v.to(device)
+    return generation_input
+
+
+
 class InterleaveInferencer:
     def __init__(self, model, vae_model, tokenizer, vae_transform, vit_transform, new_token_ids):
         self.model = model
@@ -37,7 +46,7 @@ class InterleaveInferencer:
         return gen_context
 
     @torch.no_grad()
-    def update_context_text(self, text, gen_context):
+    def update_context_text(self, text, gen_context, device=None):
         # used for interleave data, currently only support 1 data inference, 
 
         past_key_values = gen_context['past_key_values']
@@ -50,6 +59,7 @@ class InterleaveInferencer:
             tokenizer=self.tokenizer, 
             new_token_ids=self.new_token_ids,
         )
+        generation_input = move_generation_input_to_device(generation_input, device)
 
         past_key_values = self.model.forward_cache_update_text(past_key_values, **generation_input)        
         gen_context['kv_lens'] = kv_lens
@@ -59,7 +69,7 @@ class InterleaveInferencer:
         return gen_context
 
     @torch.no_grad()
-    def update_context_image(self, image, gen_context, vae=True, vit=True):
+    def update_context_image(self, image, gen_context, vae=True, vit=False, device=None):
         # used for interleave data, currently only support 1 data inference, 
 
         assert vae or vit
@@ -76,6 +86,7 @@ class InterleaveInferencer:
                 transforms=self.vae_transform, 
                 new_token_ids=self.new_token_ids,
             )
+            generation_input = move_generation_input_to_device(generation_input, device)
             past_key_values = self.model.forward_cache_update_vae(self.vae_model, past_key_values, **generation_input)
         
         if vit:
@@ -87,6 +98,7 @@ class InterleaveInferencer:
                 transforms=self.vit_transform, 
                 new_token_ids=self.new_token_ids,
             )
+            generation_input = move_generation_input_to_device(generation_input, device)
             past_key_values = self.model.forward_cache_update_vit(past_key_values, **generation_input)
 
         gen_context['kv_lens'] = kv_lens
@@ -108,9 +120,9 @@ class InterleaveInferencer:
         cfg_interval=(0.4, 1.0),
         cfg_renorm_min=0.0,
         cfg_renorm_type="global",
-        
         num_timesteps=50, 
-        timestep_shift=3.0
+        timestep_shift=3.0,
+        device=None,
     ):
         # print(cfg_renorm_type)
         past_key_values = gen_context['past_key_values']
@@ -142,6 +154,14 @@ class InterleaveInferencer:
             curr_rope=ropes_cfg, 
             image_sizes=[image_shape], 
         )
+
+        generation_input = {k: v.to(torch.bfloat16) if v.dtype == torch.float32 else v for k, v in generation_input.items()}
+        generation_input_cfg_text = {k: v.to(torch.bfloat16) if v.dtype == torch.float32 else v for k, v in generation_input_cfg_text.items()}
+        generation_input_cfg_img = {k: v.to(torch.bfloat16) if v.dtype == torch.float32 else v for k, v in generation_input_cfg_img.items()}
+        generation_input = move_generation_input_to_device(generation_input, device)
+        generation_input_cfg_text = move_generation_input_to_device(generation_input_cfg_text, device)
+        generation_input_cfg_img = move_generation_input_to_device(generation_input_cfg_img, device)
+        
 
         unpacked_latent = self.model.generate_image(
             past_key_values=past_key_values,
@@ -208,7 +228,7 @@ class InterleaveInferencer:
         input_lists: List[Union[str, Image.Image]],
         think=False,
         understanding_output=False,
-
+        device=None,
         max_think_token_n=1000,
         do_sample=False,
         text_temperature=0.3,
@@ -233,24 +253,25 @@ class InterleaveInferencer:
                     system_prompt = VLM_THINK_SYSTEM_PROMPT 
                 else:
                     system_prompt = GEN_THINK_SYSTEM_PROMPT
-                gen_context = self.update_context_text(system_prompt, gen_context)
-                cfg_img_context = self.update_context_text(system_prompt, cfg_img_context)
+                gen_context = self.update_context_text(system_prompt, gen_context, device=device)
+                cfg_img_context = self.update_context_text(system_prompt, cfg_img_context, device=device)
 
             for input_term in input_lists:
                 if isinstance(input_term, str):
                     cfg_text_context = deepcopy(gen_context)
-                    gen_context = self.update_context_text(input_term, gen_context)
-                    cfg_img_context = self.update_context_text(input_term, cfg_img_context)
+                    gen_context = self.update_context_text(input_term, gen_context, device=device)
+                    cfg_img_context = self.update_context_text(input_term, cfg_img_context, device=device)
 
                 elif isinstance(input_term, Image.Image):
                     input_term = self.vae_transform.resize_transform(pil_img2rgb(input_term))
-                    gen_context = self.update_context_image(input_term, gen_context, vae=not understanding_output)
+                    gen_context = self.update_context_image(input_term, gen_context,vae=True, device=device)
 
                     image_shapes = input_term.size[::-1]
                     cfg_text_context = deepcopy(gen_context)
 
                 else:
                     raise ValueError(f"Unsupported input type: {type(input_term)}")
+
 
             if understanding_output:
                 gen_text = self.gen_text(gen_context, do_sample=do_sample, temperature=text_temperature, max_length=max_think_token_n)
@@ -267,7 +288,6 @@ class InterleaveInferencer:
                     gen_context, 
                     cfg_text_precontext=cfg_text_context, 
                     cfg_img_precontext=cfg_img_context,
-
                     cfg_text_scale=cfg_text_scale, 
                     cfg_img_scale=cfg_img_scale, 
                     cfg_interval=cfg_interval, 
@@ -275,6 +295,7 @@ class InterleaveInferencer:
                     num_timesteps=num_timesteps,
                     cfg_renorm_min=cfg_renorm_min,
                     cfg_renorm_type=cfg_renorm_type,
+                    device=device,
                 )
 
                 output_list.append(img)
@@ -285,6 +306,7 @@ class InterleaveInferencer:
         self, 
         image: Optional[Image.Image] = None, 
         text: Optional[str] = None, 
+        device=None,
         **kargs
     ) -> Dict[str, Any]:
         output_dict = {'image': None, 'text': None}
@@ -299,7 +321,7 @@ class InterleaveInferencer:
         if text is not None:
             input_list.append(text)
 
-        output_list = self.interleave_inference(input_list, **kargs)
+        output_list = self.interleave_inference(input_list, device=device, **kargs)
 
         for i in output_list:
             if isinstance(i, Image.Image):
