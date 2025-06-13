@@ -355,7 +355,7 @@ def main():
     training_args.results_dir = os.path.join(training_args.results_dir, training_args.wandb_name)
 
     # Setup logging:
-    experiment_name = f"{training_args.wandb_name}-run{training_args.wandb_runid}"
+    experiment_id = f"{training_args.wandb_name}-run{training_args.wandb_runid}"
 
     if dist.get_rank() == 0:
         os.makedirs(training_args.results_dir, exist_ok=True)
@@ -363,8 +363,8 @@ def main():
         logger = create_logger(training_args.results_dir, dist.get_rank())
         wandb.init(
             project=training_args.wandb_project, 
-            id=experiment_name, 
-            name=experiment_name, 
+            id=experiment_id, 
+            name=experiment_id, 
             resume=training_args.wandb_resume,
             mode="offline" if training_args.wandb_offline else "online"
         )
@@ -374,7 +374,7 @@ def main():
     else:
         logger = create_logger(None, dist.get_rank())
     dist.barrier()
-    logger.info(f'========== Launching experiment: {experiment_name} ==========' )
+    logger.info(f'========== Launching experiment: {experiment_id} ==========' )
 
     logger.info(f'Training arguments {training_args}')
     logger.info(f'Model arguments {model_args}')
@@ -494,6 +494,7 @@ def main():
     model, ema_model = FSDPCheckpoint.try_load_ckpt(
         resume_from, logger, model, ema_model, resume_from_ema=finetune_from_ema
     )
+
     ema_model = fsdp_ema_setup(ema_model, fsdp_config)
     fsdp_model = fsdp_wrapper(model, fsdp_config)
     apply_activation_checkpointing(
@@ -503,6 +504,7 @@ def main():
         ), 
         check_fn=grad_checkpoint_check_fn
     )
+
 
     if dist.get_rank() == 0:
         print(fsdp_model)
@@ -548,7 +550,7 @@ def main():
         shutil.copy2(data_args.dataset_config_file, dst_config)
     with open(data_args.dataset_config_file, "r") as stream:
         dataset_meta = yaml.safe_load(stream)
-        
+        print('dataset_meta', dataset_meta)
     
     print(dataset_meta)
     dataset_config = DataConfig(grouped_datasets=dataset_meta)
@@ -564,7 +566,7 @@ def main():
         dataset_config.vit_cond_dropout_prob = model_args.vit_cond_dropout_prob
 
     
-    print(dataset_config)
+    print('dataset_config', dataset_config)
     train_dataset = PackedDataset(
         dataset_config,
         tokenizer=tokenizer,
@@ -580,7 +582,7 @@ def main():
         interpolate_pos=model_args.interpolate_pos,
         use_flex=training_args.use_flex,
         data_status=data_status,
-        experiment_name=experiment_name,
+        experiment_name=training_args.wandb_name,
     )
     train_dataset.set_epoch(data_args.data_seed)
     train_loader = DataLoader(
@@ -704,7 +706,7 @@ def main():
                 data_status[item['dataset_name']] = {}
             data_status[item['dataset_name']][item['worker_id']] = item['data_indexes']
 
-        if curr_step == 1 or curr_step % training_args.save_every == 0:
+        if curr_step % training_args.save_every == 0:
             if dist.get_rank() == 0:
                 gather_list = [None] * dist.get_world_size()
             else:
@@ -720,7 +722,8 @@ def main():
                 scheduler=scheduler, 
                 logger=logger,
                 fsdp_config=fsdp_config,
-                data_status=gather_list
+                data_status=gather_list,
+                save_bf16=True,
             )
 
     logger.info("Done!")

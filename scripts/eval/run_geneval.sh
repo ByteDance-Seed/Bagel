@@ -3,11 +3,12 @@
 
 set -x
 
-GPUS=8
 model_path=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-small-fake
 model_path=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-7B-MoT
 
 
+GPUS=4
+step=0000500
 # Edit images
 PYTHONPATH=. torchrun \
     --nnodes=1 \
@@ -15,14 +16,30 @@ PYTHONPATH=. torchrun \
     --nproc_per_node=$GPUS \
     --master_addr=127.0.0.1 \
     --master_port=12345 \
-    ./eval/gen/gen_images_edit_mp.py \
+    ./eval/gen/gen_images_edit_mp_new.py \
     --model-path $model_path \
     --resolution 448 \
-    --run_name pi_arx_50step_seed_448_gpu8_seq16384 \
-    # --model_mode raw
+    --checkpoint_step $step \
+    --run_name pi_ur5_endspan_seedp1_gpu8_seq32768 \
+    --model_mode raw
 
 
-    # --checkpoint_step 0000000 \
+# # Edit images
+# PYTHONPATH=. torchrun \
+#     --nnodes=1 \
+#     --node_rank=0 \
+#     --nproc_per_node=$GPUS \
+#     --master_addr=127.0.0.1 \
+#     --master_port=12345 \
+#     simple_edits.py \
+#     --model-path $model_path \
+#     # --resolution 448 \
+#     # --run_name pi_arx_50step_seed_448_gpu8_seq16384 \
+#     # --checkpoint_step 0002000 \
+#     # --model_mode ema
+
+
+
 
 # # generate images
 # PYTHONPATH=. torchrun \

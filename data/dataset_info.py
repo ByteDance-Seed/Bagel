@@ -36,10 +36,19 @@ DATASET_INFO = {
             'data_dir': '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
             "jsonl_path": '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/annotations_GPT4V/filtered_combined_splits.jsonl', # information of the parquet files
 		},
+        'seed_part1': {
+            'data_dir': '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
+            "jsonl_path": '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/annotations_GPT4V/filtered_combined_splits.jsonl', # information of the parquet files
+		},
     },
     "pi_edit": {
         'pi_edit': {
-            'dataset_name': 'pi_edit',
+            'data_dir': '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
+		},
+        'arx_endspan_448': {
+            'data_dir': '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
+		},
+        'ur5_endspan_448': {
             'data_dir': '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
 		},
     },

@@ -115,8 +115,13 @@ class PackedDataset(torch.utils.data.IterableDataset):
             for item in dataset_names:
                 if self.local_rank == 0:
                     print(f'Preparing Dataset {grouped_dataset_name}/{item}')
-                meta_info = DATASET_INFO[grouped_dataset_name][item]
-                dataset_args['data_dir_list'].append(meta_info['data_dir'])
+
+                if item in DATASET_INFO[grouped_dataset_name].keys():
+                    meta_info = DATASET_INFO[grouped_dataset_name][item]
+                else:
+                    meta_info = {}
+                if 'data_dir' in meta_info.keys():
+                    dataset_args['data_dir_list'].append(meta_info['data_dir'])
 
                 if "parquet_info_path" in meta_info.keys():
                     if 'parquet_info' not in dataset_args.keys():
