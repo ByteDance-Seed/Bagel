@@ -772,8 +772,10 @@ class Qwen2MoTDecoderLayer(nn.Module):
             packed_query_sequence = self.input_layernorm(packed_query_sequence)
         elif mode == "gen":
             packed_query_sequence_ = torch.zeros_like(packed_query_sequence)
-            packed_query_sequence_[packed_text_indexes] = self.input_layernorm(packed_query_sequence[packed_text_indexes])
-            packed_query_sequence_[packed_vae_token_indexes] = self.input_layernorm_moe_gen(packed_query_sequence[packed_vae_token_indexes])
+            if packed_query_sequence_.dtype == torch.float8_e4m3fn:
+                packed_query_sequence_ = packed_query_sequence_.to(torch.bfloat16)
+            packed_query_sequence_[packed_text_indexes] = self.input_layernorm(packed_query_sequence[packed_text_indexes]).to(packed_query_sequence_.dtype)
+            packed_query_sequence_[packed_vae_token_indexes] = self.input_layernorm_moe_gen(packed_query_sequence[packed_vae_token_indexes]).to(packed_query_sequence_.dtype)
             packed_query_sequence = packed_query_sequence_
 
         # Self Attention
@@ -791,6 +793,8 @@ class Qwen2MoTDecoderLayer(nn.Module):
             packed_vae_token_indexes=packed_vae_token_indexes,
             packed_text_indexes=packed_text_indexes,
         )
+        if residual.dtype == torch.float8_e4m3fn:
+            residual = residual.to(packed_query_sequence.dtype)
         packed_query_sequence = residual + packed_query_sequence
 
         # Fully Connected
@@ -1049,8 +1053,10 @@ class Qwen2Model(Qwen2PreTrainedModel):
                 packed_query_sequence = self.norm(packed_query_sequence)
             elif mode == "gen":
                 packed_query_sequence_ = torch.zeros_like(packed_query_sequence)
-                packed_query_sequence_[packed_text_indexes] = self.norm(packed_query_sequence[packed_text_indexes])
-                packed_query_sequence_[packed_vae_token_indexes] = self.norm_moe_gen(packed_query_sequence[packed_vae_token_indexes])
+                if packed_query_sequence_.dtype == torch.float8_e4m3fn:
+                    packed_query_sequence_ = packed_query_sequence_.to(torch.bfloat16)
+                packed_query_sequence_[packed_text_indexes] = self.norm(packed_query_sequence[packed_text_indexes]).to(packed_query_sequence_.dtype)
+                packed_query_sequence_[packed_vae_token_indexes] = self.norm_moe_gen(packed_query_sequence[packed_vae_token_indexes]).to(packed_query_sequence_.dtype)
                 packed_query_sequence = packed_query_sequence_
         else:
             packed_query_sequence = self.norm(packed_query_sequence)

@@ -189,7 +189,10 @@ class SiglipVisionEmbeddings(nn.Module):
 
         patch_embeds = self.patch_embedding(packed_pixel_values)
         if not self.config.rope:
-            embeddings = patch_embeds + self.position_embedding(packed_flattened_position_ids)
+            pos_embeds = self.position_embedding(packed_flattened_position_ids)
+            if pos_embeds.dtype == torch.float8_e4m3fn:
+                pos_embeds = pos_embeds.to(patch_embeds.dtype)
+            embeddings = patch_embeds + pos_embeds
         else:
             embeddings = patch_embeds
         return embeddings

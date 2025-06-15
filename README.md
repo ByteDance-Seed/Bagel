@@ -150,6 +150,11 @@ python app.py --mode 2 --zh
 python app.py  --mode 3
 ```
 
+```
+# For 20~32GB VRAM GPU, FP8 quantization. Slower than NF4 or INT8, but useful if bitsandbytes is not supported, e.g. some AMD GPUs
+python app.py --mode 4
+```
+
 ## 🔥 Train & Eval
 
 ### Train
