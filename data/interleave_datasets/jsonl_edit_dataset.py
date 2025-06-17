@@ -9,6 +9,7 @@ from PIL import Image, ImageFile, PngImagePlugin
 
 from .interleave_t2i_dataset import InterleavedBaseIterableDataset, ParquetStandardIterableDataset
 from ..data_utils import pil_img2rgb
+import wandb
 
 Image.MAX_IMAGE_PIXELS = 200000000
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -22,7 +23,7 @@ class EditJSONLIterableDataset(InterleavedBaseIterableDataset):
         self, dataset_name, transform, tokenizer, vit_transform, 
         jsonl_path_list, data_dir_list, num_used_data, experiment_name='debug',
         local_rank=0, world_size=1, num_workers=8, data_status=None, 
-        shuffle_lines=False, shuffle_seed=0,
+        shuffle_lines=True, shuffle_seed=0, n_log_examples=100,
     ):
         """
         jsonl_path_list: list of jsonl file paths
@@ -35,6 +36,9 @@ class EditJSONLIterableDataset(InterleavedBaseIterableDataset):
         self.vit_transform = vit_transform
         self.data_status = data_status
         self.experiment_name = experiment_name
+        self.data_table = wandb.Table(columns=["id", "image", "instruction", "target"])
+
+        self.n_log_examples = n_log_examples
         self.data_paths = self.get_data_paths(
             jsonl_path_list, 
             data_dir_list, 
@@ -113,15 +117,15 @@ class EditJSONLIterableDataset(InterleavedBaseIterableDataset):
 
                 if len(data) == 0:
                     continue
+                # Add logger for debugging
+                if row_idx <= self.n_log_examples:
+                    # Create side-by-side full_example with text
+                    self.save_example_image(condition_image, edited_image, edit_instruction, row_idx)
                 data['data_indexes'] = {
                     "data_indexes": row_idx,
                     "worker_id": worker_id,
                     "dataset_name": self.dataset_name,
                 }
-                # Add logger for debugging
-                if row_idx % 100 == 0:
-                    # Create side-by-side full_example with text
-                    self.save_example_image(condition_image, edited_image, edit_instruction, row_idx)
                 yield data
 
             row_start_id = 0

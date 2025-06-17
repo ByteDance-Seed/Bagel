@@ -23,7 +23,7 @@ from monopi.experimental.dibyaghosh import utils as experimental_utils
 from monopi.model.configs import registered_configs as register_cfg
 from monopi.lib.py.image import image as lib_image
 import monopi.lib.py.ml.jax.string_encode as string_encode
-
+import wandb
 import getpass
 from .interleave_t2i_dataset import InterleavedBaseIterableDataset, ParquetStandardIterableDataset
 from ..data_utils import pil_img2rgb
@@ -53,9 +53,9 @@ def create_pi_dataset(
 class PiEditIterableDataset(InterleavedBaseIterableDataset):
     def __init__(
         self, pi_config_name, dataset_name, transform, tokenizer, vit_transform, 
-        data_dir_list, num_used_data, experiment_name='debug',
+        data_dir_list, num_used_data, experiment_name='debug', 
         local_rank=0, world_size=1, num_workers=8, data_status=None, 
-        shuffle_lines=False, shuffle_seed=0,
+        shuffle_lines=False, shuffle_seed=0, n_log_examples=100, image_key="image_0"
     ):
         """
         jsonl_path_list: list of jsonl file paths
@@ -70,6 +70,10 @@ class PiEditIterableDataset(InterleavedBaseIterableDataset):
         self.data_status = data_status
         self.data_paths = self.get_data_paths()
         self.experiment_name = experiment_name
+
+        self.data_table = wandb.Table(columns=["id", "image", "instruction", "target"])
+        self.n_log_examples = n_log_examples
+        self.image_key = image_key
         self.set_epoch()
 
 
@@ -97,7 +101,7 @@ class PiEditIterableDataset(InterleavedBaseIterableDataset):
             for row_idx, row in enumerate(data_paths_per_worker_, start=row_start_id):
 
                 data = self._init_data()
-                condition_image = row["image"]['image_0']
+                condition_image = row["image"][self.image_key]
                 condition_image = Image.fromarray(lib_image.decompress_image_if_needed(condition_image))
                 data = self._add_image(
                     data, 
@@ -108,7 +112,7 @@ class PiEditIterableDataset(InterleavedBaseIterableDataset):
                 )
                 edit_instruction = str(string_encode.decode_str(row["raw_text"]))
                 data = self._add_text(data, edit_instruction, need_loss=False)
-                edited_image = row["future_image"]['future_image_0']
+                edited_image = row["future_image"][f'future_{self.image_key}']
                 edited_image = Image.fromarray(lib_image.decompress_image_if_needed(edited_image))
                 data = self._add_image(
                     data, 
@@ -120,15 +124,15 @@ class PiEditIterableDataset(InterleavedBaseIterableDataset):
 
                 if len(data) == 0:
                     continue
+                # Add logger for debugging
+                if row_idx <= self.n_log_examples:
+                    # Create side-by-side full_example with text
+                    self.save_example_image(condition_image, edited_image, edit_instruction, row_idx)
                 data['data_indexes'] = {
                     "data_indexes": row_idx,
                     "worker_id": worker_id,
                     "dataset_name": self.dataset_name,
                 }
-                # Add logger for debugging
-                if row_idx % 100 == 0:
-                    # Create side-by-side full_example with text
-                    self.save_example_image(condition_image, edited_image, edit_instruction, row_idx)
                 yield data
 
             row_start_id = 0

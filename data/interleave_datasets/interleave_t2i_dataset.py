@@ -8,6 +8,7 @@ from ..parquet_utils import get_parquet_data_paths, init_arrow_pf_fs
 
 from PIL import Image, ImageDraw
 import os
+import wandb
 class InterleavedBaseIterableDataset(DistributedIterableDataset):
 
     def _init_data(self):
@@ -130,12 +131,20 @@ class InterleavedBaseIterableDataset(DistributedIterableDataset):
         return data
 
     def save_example_image(self, condition_image, edited_image, edit_instruction, row_idx):
-        border_width = 2
-        text_height = 50  # Space for text at bottom
-
+        img_dir = os.path.join("results", self.experiment_name, f"{self.dataset_name}_examples")
+        os.makedirs(img_dir, exist_ok=True)
         condition_image = self.transform.resize_transform(condition_image)
         edited_image = self.transform.resize_transform(edited_image)
 
+        condition_image.save(os.path.join(img_dir, f"example_{row_idx}_source.png"))
+        edited_image.save(os.path.join(img_dir, f"example_{row_idx}_target.png"))
+        with open(os.path.join(img_dir, f"example_{row_idx}_instruction.txt"), "w") as f:
+            f.write(edit_instruction)
+
+        self.data_table.add_data(row_idx, condition_image, edit_instruction, edited_image)
+
+        border_width = 2
+        text_height = 50  # Space for text at bottom
         total_width = condition_image.width + edited_image.width + border_width
         total_height = max(condition_image.height, edited_image.height) + text_height
 
@@ -149,10 +158,8 @@ class InterleavedBaseIterableDataset(DistributedIterableDataset):
         draw = ImageDraw.Draw(full_example)
         text_y = max(condition_image.height, edited_image.height) + 5
         draw.text((10, text_y), edit_instruction, fill='black')
-        img_dir = os.path.join("results", self.experiment_name, f"{self.dataset_name}_examples")
-        os.makedirs(img_dir, exist_ok=True)
         full_example.save(os.path.join(img_dir, f"example_{row_idx}.png"))
-
+        
 
 class ParquetStandardIterableDataset(DistributedIterableDataset):
 

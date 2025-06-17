@@ -8,7 +8,7 @@ model_path=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-7B-MoT
 
 
 GPUS=4
-step=0000500
+step=0002000
 # Edit images
 PYTHONPATH=. torchrun \
     --nnodes=1 \

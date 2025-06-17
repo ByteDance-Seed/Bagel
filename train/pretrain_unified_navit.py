@@ -383,6 +383,7 @@ def main():
     # prepare auto resume logic:
     if training_args.auto_resume:
         resume_from = get_latest_ckpt(training_args.checkpoint_dir)
+        print('resume_from trained checkpoints', resume_from)
         if resume_from is None:
             resume_from = training_args.resume_from
             resume_model_only = training_args.resume_model_only
@@ -601,6 +602,8 @@ def main():
     fsdp_model.train()
     ema_model.eval()
 
+    
+
     # train loop
     start_time = time()
     logger.info(f"Training for {training_args.total_steps} steps, starting at {train_step}...")
@@ -705,6 +708,11 @@ def main():
             if item['dataset_name'] not in data_status.keys():
                 data_status[item['dataset_name']] = {}
             data_status[item['dataset_name']][item['worker_id']] = item['data_indexes']
+
+        if curr_step == 10 and dist.get_rank() == 0:
+            for dataset in train_dataset.grouped_datasets:
+                if dataset.data_table is not None:
+                    wandb.log({"data_table": dataset.data_table})
 
         if curr_step % training_args.save_every == 0:
             if dist.get_rank() == 0:
