@@ -129,6 +129,16 @@ elif args.mode == 3: # INT8
         device_map=device_map,
         offload_folder="offload",
     ).eval()
+elif args.mode == 4: # FP8
+    model = load_checkpoint_and_dispatch(
+        model,
+        checkpoint=os.path.join(model_path, "ema.safetensors"),
+        device_map=device_map,
+        offload_buffers=True,
+        offload_folder="offload",
+        dtype=torch.float8_e4m3fn,
+        force_hooks=True,
+    ).eval()
 else:
     raise NotImplementedError
 
