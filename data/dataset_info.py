@@ -1,7 +1,7 @@
 # Copyright 2025 Bytedance Ltd. and/or its affiliates.
 # SPDX-License-Identifier: Apache-2.0
 
-from .interleave_datasets import UnifiedEditIterableDataset, EditJSONLIterableDataset, PiEditIterableDataset
+from .interleave_datasets import UnifiedEditIterableDataset, EditJSONLIterableDataset, PiEditIterableDataset, PiEditAllViewsIterableDataset
 from .t2i_dataset import T2IIterableDataset
 from .vlm_dataset import SftJSONLIterableDataset
 
@@ -12,6 +12,9 @@ DATASET_REGISTRY = {
     'unified_edit': UnifiedEditIterableDataset,
     'simple_edit': EditJSONLIterableDataset,
     'pi_edit': PiEditIterableDataset,
+    'pi_edit2': PiEditIterableDataset,
+    'pi_edit3': PiEditIterableDataset,
+    'pi_edit_allviews': PiEditAllViewsIterableDataset,
 }
 
 
@@ -48,6 +51,21 @@ DATASET_INFO = {
         'arx_endspan_448': {
             'data_dir': '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
 		},
+        'ur5_endspan_448': {
+            'data_dir': '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
+		},
+    },
+    "pi_edit2": {
+        'ur5_endspan_448': {
+            'data_dir': '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
+		},
+    },
+    "pi_edit3": {
+        'ur5_endspan_448': {
+            'data_dir': '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
+		},
+    },
+    "pi_edit_allviews": {
         'ur5_endspan_448': {
             'data_dir': '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
 		},

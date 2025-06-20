@@ -7,12 +7,12 @@ num_nodes=1
 node_rank=0
 master_addr=localhost
 master_port=29500
-model_path=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-7B-MoT
-# model_path=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-small-fake
+# model_path=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-7B-MoT
+model_path=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-small-fake
   # --resume-from $model_path \
 # resume_from=$model_path
 resume_from=None
-GPUS=8
+GPUS=1
 
 
 batch_size=1
@@ -26,7 +26,7 @@ PYTHONPATH=. torchrun \
   --master_addr=$master_addr \
   --master_port=$master_port \
   train/pretrain_unified_navit.py \
-  --dataset_config_file ./data/configs/seedp1_0.2_arx_100step_224.yaml \
+  --dataset_config_file ./data/configs/seedp1_0.2_arxbiarm_3view_independent_endspan.yaml \
   --model_path $model_path \
   --layer_module Qwen2MoTDecoderLayer \
   --max_latent_size 64 \
@@ -41,7 +41,7 @@ PYTHONPATH=. torchrun \
   --max_num_tokens $seq_len \
   --max_num_tokens_per_sample $seq_len \
   --batch_size $batch_size \
-  --wandb_name test_logging \
+  --wandb_name test_3views_small \
   --wandb_runid 0 \
   --num_shard $GPUS \
   --use_flex True \
