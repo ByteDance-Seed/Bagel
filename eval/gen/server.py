@@ -9,6 +9,7 @@ import random
 from accelerate import infer_auto_device_map, load_checkpoint_and_dispatch, init_empty_weights
 from PIL import Image
 from safetensors.torch import load_file
+from accelerate.utils import BnbQuantizationConfig, load_and_quantize_model
 
 from data.data_utils import add_special_tokens, pil_img2rgb
 from data.transforms import ImageTransform
@@ -35,7 +36,7 @@ logger = logging.getLogger(__name__)
 PRETRAINED_PATH = "pretrained_models/BAGEL-7B-MoT"
 model_path = PRETRAINED_PATH
 
-def prepare_model(weights_path: str):
+def prepare_model(weights_path: str, mode: int):
     print(f"Loading model from {weights_path}") 
     # Model Initialization
     llm_config = Qwen2Config.from_json_file(os.path.join(model_path, "llm_config.json"))
@@ -107,15 +108,37 @@ def prepare_model(weights_path: str):
                 device_map[k] = first_device
 
     print(device_map)
-    model = load_checkpoint_and_dispatch(
-        model,
-        checkpoint=ckpt_path,
-        device_map=device_map,
-        offload_buffers=True,
-        offload_folder="offload",
-        dtype=torch.bfloat16,
-        force_hooks=True,
-    ).eval()
+
+    if args.mode == 1:
+        model = load_checkpoint_and_dispatch(
+            model,
+            checkpoint=ckpt_path,
+            device_map=device_map,
+            offload_buffers=True,
+            offload_folder="offload",
+            dtype=torch.bfloat16,
+            force_hooks=True,
+        ).eval()
+    elif args.mode == 2: # NF4
+        bnb_quantization_config = BnbQuantizationConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.bfloat16, bnb_4bit_use_double_quant=False, bnb_4bit_quant_type="nf4")
+        model = load_and_quantize_model(
+            model, 
+            weights_location=ckpt_path, 
+            bnb_quantization_config=bnb_quantization_config,
+            device_map=device_map,
+            offload_folder="offload",
+        ).eval()
+    elif args.mode == 3: # INT8
+        bnb_quantization_config = BnbQuantizationConfig(load_in_8bit=True, torch_dtype=torch.float32)
+        model = load_and_quantize_model(
+            model, 
+            weights_location=ckpt_path, 
+            bnb_quantization_config=bnb_quantization_config,
+            device_map=device_map,
+            offload_folder="offload",
+        ).eval()
+    else:
+        raise NotImplementedError
 
     print("===================  Model loaded successfully  ==============")
 
@@ -207,7 +230,7 @@ async def main(args):
     """
     Starts the WebSocket server.
     """
-    inferencer = prepare_model(args.weights_path)
+    inferencer = prepare_model(args.weights_path, args.mode)
 
     print(f"Starting WebSocket server on ws://localhost:{args.port}")
     # async with websockets.serve(ft.partial(handler, ckpt_dir=args.weights_path), "0.0.0.0", args.port, compression=None, max_size=None) as server:
@@ -218,6 +241,7 @@ async def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser() 
     parser.add_argument("--weights_path", type=str, default="/home/liliyu/workspace/BAGEL/results/pi_ur5e4_b1_endspan_lang_seedp1_gpu8_seq16384/checkpoints/0030000")
+    parser.add_argument("--mode", type=int, default=1)
     parser.add_argument("--port", type=int, default=8767)
     args = parser.parse_args()
     asyncio.run(main(args))

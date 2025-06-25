@@ -24,17 +24,17 @@ task_name='arx_endspan'
 
 # exp_names=(
 #     pi_ur5e4_endspan_seedp1_gpu8_seq16384
-#     pi_ur5e4_i2_endspan_seedp1_gpu8_seq16384
+#     pi_ur5e4_endspan_lange_seedp1_gpu8_seq16384
 # )
-# task_name='ur5e4_endspan'
+# task_name='ur5e4_endspan_lang'
 
 # wandb_project_name='bagel-edit-eval2'
 
 
-# exp_names=(
-#     pi_ur5e4_b1_endspan_seedp1_gpu8_seq16384
-# )
-# task_name='ur5e4_b1_endspan'
+exp_names=(
+    pi_ur5e4_b1_endspan_lang_seedp1_gpu8_seq16384
+)
+task_name='ur5e4_b1_endspan_lang'
 
 
 # exp_names=(
@@ -46,10 +46,8 @@ task_name='arx_endspan'
 wandb_project_name='bagel-edit-eval'
 
 
-
-
 # while true; do
-for mode in ema; do
+for mode in raw; do
     for exp_name in "${exp_names[@]}"; do
         if [[ $exp_name == *"448"* ]]; then
             resolution=448
@@ -72,7 +70,7 @@ for mode in ema; do
             step=$((10#$step))
             echo ${step}
             
-            if (( $step % 20000 != 0 || $step <= 0 ))
+            if (( $step % 10000 != 0 || $step <= 0 ))
             then
                 continue
             fi
