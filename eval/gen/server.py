@@ -32,7 +32,7 @@ import asyncio
 from msgpack_numpy import Packer, unpackb
 
 logger = logging.getLogger(__name__)
-PRETRAINED_PATH = "hf/BAGEL-7B-MoT"
+PRETRAINED_PATH = "pretrained_models/BAGEL-7B-MoT"
 model_path = PRETRAINED_PATH
 
 def prepare_model(weights_path: str):
@@ -51,7 +51,7 @@ def prepare_model(weights_path: str):
 
     config = BagelConfig(
         visual_gen=True,
-        visual_und=True,
+        visual_und=False,
         llm_config=llm_config, 
         vit_config=vit_config,
         vae_config=vae_config,
@@ -68,99 +68,55 @@ def prepare_model(weights_path: str):
     ckpt_path = os.path.join(weights_path, "model.safetensors")
     print(f"Loading checkpoint from {ckpt_path}")
     
-    '''
+
     with init_empty_weights():
         language_model = Qwen2ForCausalLM(llm_config)
         vit_model      = SiglipVisionModel(vit_config)
         model          = Bagel(language_model, vit_model, config)
-        model.vit_model.vision_model.embeddings.convert_conv2d_to_linear(vit_config) #, meta=True)
-    multi_gpu = True
-    if multi_gpu:
-        # Model Loading and Multi GPU Infernece Preparing
-        device_map = infer_auto_device_map(
-            model,
-            max_memory={i: "32GiB" for i in range(torch.cuda.device_count())},
-            no_split_module_classes=["Bagel", "Qwen2MoTDecoderLayer"],
-        )
+        # model.vit_model.vision_model.embeddings.convert_conv2d_to_linear(vit_config, meta=True)
+    
+    # Model Loading and Multi GPU Infernece Preparing
+    device_map = infer_auto_device_map(
+        model,
+        max_memory={i: "32GiB" for i in range(torch.cuda.device_count())},
+        no_split_module_classes=["Bagel", "Qwen2MoTDecoderLayer"],
+    )
 
-        same_device_modules = [
-            'language_model.model.embed_tokens',
-            'time_embedder',
-            'latent_pos_embed',
-            'vae2llm',
-            'llm2vae',
-            'connector',
-            'vit_pos_embed'
-        ]
+    same_device_modules = [
+        'language_model.model.embed_tokens',
+        'time_embedder',
+        'latent_pos_embed',
+        'vae2llm',
+        'llm2vae',
+        'connector',
+        'vit_pos_embed'
+    ]
 
-        if torch.cuda.device_count() == 1:
-            first_device = device_map.get(same_device_modules[0], "cuda:0")
-            for k in same_device_modules:
-                if k in device_map:
-                    device_map[k] = first_device
-                else:
-                    device_map[k] = "cuda:0"
-        else:
-            first_device = device_map.get(same_device_modules[0])
-            for k in same_device_modules:
-                if k in device_map:
-                    device_map[k] = first_device
-
-
-        model = load_checkpoint_and_dispatch(
-            model,
-            checkpoint=ckpt_path,
-            device_map=device_map,
-            offload_buffers=True,
-            offload_folder="offload",
-            dtype=torch.bfloat16,
-            force_hooks=True,
-        ).eval()
+    if torch.cuda.device_count() == 1:
+        print("single gpu")
+        first_device = device_map.get(same_device_modules[0], "cuda:0")
+        for k in same_device_modules:
+            if k in device_map:
+                device_map[k] = first_device
+            else:
+                device_map[k] = "cuda:0"
     else:
-        model_state_dict = load_file(ckpt_path, device="cpu")
-        model.load_state_dict(model_state_dict, strict=False)
-        del model_state_dict
+        first_device = device_map.get(same_device_modules[0])
+        for k in same_device_modules:
+            if k in device_map:
+                device_map[k] = first_device
 
-        # Then move to CUDA + bfloat16
-        model = model.to("cuda").to(torch.bfloat16).eval()
-    '''
-    with init_empty_weights():
-        language_model = Qwen2ForCausalLM(llm_config)
-        vit_model = SiglipVisionModel(vit_config)
-        model = Bagel(language_model, vit_model, config)
-        model.vit_model.vision_model.embeddings.convert_conv2d_to_linear(vit_config)
-
-    # recommended device_map
-    multi_gpu = True
-    if multi_gpu:
-        device_map = infer_auto_device_map(
-            model,
-            max_memory={i: "24GiB" for i in range(torch.cuda.device_count())},
-            no_split_module_classes=["Bagel", "Qwen2MoTDecoderLayer"],
-        )
-    else:
-        device_map = {"": "cuda:0"}
-
-        # model = load_checkpoint_and_dispatch(
-        #     model,
-        #     checkpoint=ckpt_path,
-        #     device_map=device_map,
-        #     offload_buffers=True,
-        #     offload_folder="offload",
-        #     dtype=torch.bfloat16,
-        #     force_hooks=True,
-        # ).eval()
-
-    # always use load_checkpoint_and_dispatch!
+    print(device_map)
     model = load_checkpoint_and_dispatch(
         model,
         checkpoint=ckpt_path,
         device_map=device_map,
         offload_buffers=True,
         offload_folder="offload",
-        # no_split_module_classes=["Qwen2DecoderLayer", "SiglipVisionModel"],
         dtype=torch.bfloat16,
+        force_hooks=True,
     ).eval()
+
     print("===================  Model loaded successfully  ==============")
 
     # Inferencer Preparing 
@@ -190,7 +146,7 @@ def set_seed(seed):
     return seed
 
 inference_hyper = dict(
-    cfg_text_scale=5.0,
+    cfg_text_scale=4.0,
     cfg_img_scale=1.2,
     cfg_interval=[0.0, 1.0],
     timestep_shift=2.0,
@@ -204,17 +160,18 @@ packer = Packer()
 
 
 #### SERVER SIDE ####
-async def handler(websocket, ckpt_dir: str=PRETRAINED_PATH):
+async def handler(websocket, inferencer):
     try:
         logger.info(f"Connection from {websocket.remote_address} opened")
-        inferencer = prepare_model(ckpt_dir)
-
-        def infer(inputs: dict) -> dict:
+        
+        def infer(inputs: dict, cfg_text_scale=4.0, cfg_img_scale=1.5) -> dict:
             set_seed(42)
             source_image = Image.fromarray(inputs['observation/base_0_camera/rgb/image'])
             source_image.save("ur5s4_b1_source.png")
             prompt = inputs['raw_text']
             print(prompt)
+            inference_hyper['cfg_text_scale'] = cfg_text_scale
+            inference_hyper['cfg_img_scale'] = cfg_img_scale
             output_dict = inferencer(image=source_image, text=prompt, **inference_hyper)
             prompt = prompt.replace(" ", "_")
             output_dict['image'].save(f"ur5s4_b1_edited_{prompt}.png")
@@ -226,10 +183,8 @@ async def handler(websocket, ckpt_dir: str=PRETRAINED_PATH):
         while True:
             try:
                 payload = await websocket.recv()
-                # args, kwargs = unpackb(payload)
-                # outputs = infer(*args, **kwargs)
-                args = unpackb(payload)
-                outputs = infer(args)
+                args, kwargs = unpackb(payload)
+                outputs = infer(*args, **kwargs)
                 payload = packer.pack(outputs)
                 await websocket.send(payload)
             except websockets.ConnectionClosed:
@@ -244,7 +199,7 @@ async def handler(websocket, ckpt_dir: str=PRETRAINED_PATH):
         logger.error(f"Exception occurred: {e}")
         raise
     finally:
-        del inferencer
+        # del inferencer
         gc.collect()
 
 
@@ -252,15 +207,17 @@ async def main(args):
     """
     Starts the WebSocket server.
     """
+    inferencer = prepare_model(args.weights_path)
+
     print(f"Starting WebSocket server on ws://localhost:{args.port}")
     # async with websockets.serve(ft.partial(handler, ckpt_dir=args.weights_path), "0.0.0.0", args.port, compression=None, max_size=None) as server:
     #     await server.wait_closed()  # Run forever
-    async with websockets.serve(ft.partial(handler, ckpt_dir=args.weights_path), "localhost", args.port, compression=None, max_size=None) as server:
+    async with websockets.serve(ft.partial(handler, inferencer=inferencer), "0.0.0.0", args.port, compression=None, max_size=None) as server:
         await server.wait_closed()  # Run forever
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser() 
-    parser.add_argument("--weights_path", type=str, default="/home/liliyu/workspace/BAGEL/results/pi_ur5e4_endspan_seedp1_gpu8_seq16384/checkpoints/0022000")
+    parser.add_argument("--weights_path", type=str, default="/home/liliyu/workspace/BAGEL/results/pi_ur5e4_b1_endspan_lang_seedp1_gpu8_seq16384/checkpoints/0030000")
     parser.add_argument("--port", type=int, default=8767)
     args = parser.parse_args()
     asyncio.run(main(args))

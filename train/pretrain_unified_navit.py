@@ -167,7 +167,7 @@ class TrainingArguments:
     )
 
     # --- bookkeeping & logging ---
-    results_dir: str = field(
+    exp_checkpoint_dir: str = field(
         default="results",
         metadata={"help": "Root directory for logs."}
     )
@@ -179,7 +179,7 @@ class TrainingArguments:
         default="bagel",
         metadata={"help": "Weights & Biases project name."}
     )
-    wandb_name: str = field(
+    exp_name: str = field(
         default="run",
         metadata={"help": "Name shown in the Weights & Biases UI for this run."}
     )
@@ -351,16 +351,16 @@ def main():
     parser = HfArgumentParser((ModelArguments, DataArguments, TrainingArguments))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
-    training_args.checkpoint_dir = os.path.join(training_args.checkpoint_dir, training_args.wandb_name, "checkpoints")
-    training_args.results_dir = os.path.join(training_args.results_dir, training_args.wandb_name)
+    training_args.checkpoint_dir = os.path.join(training_args.exp_checkpoint_dir, training_args.exp_name, "checkpoints")
+    training_args.exp_checkpoint_dir = os.path.join(training_args.exp_checkpoint_dir, training_args.exp_name)
 
     # Setup logging:
-    experiment_id = f"{training_args.wandb_name}-run{training_args.wandb_runid}"
+    experiment_id = f"{training_args.exp_name}-run{training_args.wandb_runid}"
 
     if dist.get_rank() == 0:
-        os.makedirs(training_args.results_dir, exist_ok=True)
+        os.makedirs(training_args.exp_checkpoint_dir, exist_ok=True)
         os.makedirs(training_args.checkpoint_dir, exist_ok=True)
-        logger = create_logger(training_args.results_dir, dist.get_rank())
+        logger = create_logger(training_args.exp_checkpoint_dir, dist.get_rank())
         wandb.init(
             project=training_args.wandb_project, 
             id=experiment_id, 
@@ -383,7 +383,6 @@ def main():
     # prepare auto resume logic:
     if training_args.auto_resume:
         resume_from = get_latest_ckpt(training_args.checkpoint_dir)
-        print('resume_from trained checkpoints', resume_from)
         if resume_from is None:
             resume_from = training_args.resume_from
             resume_model_only = training_args.resume_model_only
@@ -401,6 +400,7 @@ def main():
             finetune_from_ema = training_args.finetune_from_ema
         else:
             finetune_from_ema = False
+    print('resume_from trained checkpoints: ', resume_from)
 
     # Set seed:
     seed = training_args.global_seed * dist.get_world_size() + dist.get_rank()
@@ -545,7 +545,7 @@ def main():
 
     # Setup packed dataloader
     # Save a copy to results dir
-    dst_config = os.path.join(training_args.results_dir, os.path.basename(data_args.dataset_config_file))
+    dst_config = os.path.join(training_args.exp_checkpoint_dir, os.path.basename(data_args.dataset_config_file))
     if dist.get_rank() == 0:
         import shutil
         shutil.copy2(data_args.dataset_config_file, dst_config)
@@ -583,7 +583,7 @@ def main():
         interpolate_pos=model_args.interpolate_pos,
         use_flex=training_args.use_flex,
         data_status=data_status,
-        experiment_name=training_args.wandb_name,
+        experiment_name=training_args.exp_name,
     )
     train_dataset.set_epoch(data_args.data_seed)
     train_loader = DataLoader(

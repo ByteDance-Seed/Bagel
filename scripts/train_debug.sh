@@ -26,13 +26,14 @@ PYTHONPATH=. torchrun \
   --master_addr=$master_addr \
   --master_port=$master_port \
   train/pretrain_unified_navit.py \
-  --dataset_config_file ./data/configs/seedp1_0.2_arxbiarm_3view_independent_endspan.yaml \
+  --dataset_config_file ./data/configs/seedp1_0.2_ur5e4_b1_allview_endspan.yaml \
   --model_path $model_path \
   --layer_module Qwen2MoTDecoderLayer \
   --max_latent_size 64 \
   --finetune_from_hf True \
   --auto_resume True \
   --resume-model-only True \
+  --exp-checkpoint-dir /mnt/weka/checkpoints/liliyu/bagel \
   --finetune-from-ema True \
   --log_every 1 \
   --lr 2e-5 \
@@ -41,10 +42,9 @@ PYTHONPATH=. torchrun \
   --max_num_tokens $seq_len \
   --max_num_tokens_per_sample $seq_len \
   --batch_size $batch_size \
-  --wandb_name test_3views_small \
+  --exp_name debug_allview_video \
   --wandb_runid 0 \
   --num_shard $GPUS \
-  --use_flex True \
   --visual_und False \
   --save_every 10
 

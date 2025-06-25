@@ -200,13 +200,13 @@ if __name__ == "__main__":
     )
 
     inference_hyper=dict(
-        cfg_text_scale=3.0, # 4.0,
-        cfg_img_scale=1.5, # 2.0,
+        cfg_text_scale=4.0, # 4.0,
+        cfg_img_scale=1.2, # 2.0,
         cfg_interval=[0.0, 1.0],
-        timestep_shift=2.0, #3.0,
+        timestep_shift=3.0, #3.0,
         num_timesteps=50,
         cfg_renorm_min=0.0,
-        cfg_renorm_type="global",
+        cfg_renorm_type="text_channel",
         image_shapes=(args.resolution, args.resolution),
     )
 

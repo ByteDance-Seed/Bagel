@@ -55,7 +55,7 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
         self, pi_config_name, dataset_name, transform, tokenizer, vit_transform, 
         data_dir_list, num_used_data, experiment_name='debug', 
         local_rank=0, world_size=1, num_workers=8, data_status=None, 
-        shuffle_lines=False, shuffle_seed=0, n_log_examples=100, image_key="image_0",   
+        shuffle_lines=False, shuffle_seed=0, n_log_examples=100, image_keys="image_0,image_2",   
         indepent_image_modeling=False,
     ):
         """
@@ -74,7 +74,7 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
 
         self.data_table = wandb.Table(columns=["id", "image", "instruction", "target"])
         self.n_log_examples = n_log_examples
-        self.image_key = image_key
+        self.image_key_list = [key.strip() for key in image_keys.split(',')]
         self.set_epoch()
 
 
@@ -99,37 +99,50 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
 
         while True:
             data_paths_per_worker_ = data_paths_per_worker[row_start_id:]
+            frame_idx = 0
             for row_idx, row in enumerate(data_paths_per_worker_, start=row_start_id):
                 data = self._init_data()
-                for image_key in ["image_0", "image_2", "image_3"]:
-                    condition_image = row["image"][self.image_key]
+                frames = []
+                frame_indexes = []
+                for image_key in self.image_key_list:
+                    condition_image = row["image"][image_key]
                     condition_image = Image.fromarray(lib_image.decompress_image_if_needed(condition_image))
-                    data = self._add_image(
-                        data, 
-                        condition_image,
-                        need_loss=False, 
-                        need_vae=True, 
-                        need_vit=True, 
-                    )
+                    frames.append(condition_image)
+                    frame_indexes.append(frame_idx)
+                    frame_idx+= 1
+                data = self._add_video(
+                    data, 
+                    frames,
+                    frame_indexes,
+                    need_loss=False, 
+                    need_vae=True, 
+                )
+
                 edit_instruction = str(string_encode.decode_str(row["raw_text"]))
                 data = self._add_text(data, edit_instruction, need_loss=False)
-                for image_key in ["image_0", "image_2", "image_3"]:
-                    edited_image = row["future_image"][f'future_{self.image_key}']
-                    edited_image = Image.fromarray(lib_image.decompress_image_if_needed(edited_image))
-                    data = self._add_image(
-                        data, 
-                        edited_image,
-                        need_loss=True, 
-                        need_vae=False, 
-                        need_vit=False,
-                    )
 
+                future_frames = []
+                future_frame_indexes = []
+                for image_key in self.image_key_list:
+                    edited_image = row["future_image"][f'future_{image_key}']
+                    edited_image = Image.fromarray(lib_image.decompress_image_if_needed(edited_image))
+                    future_frames.append(edited_image)
+                    future_frame_indexes.append(frame_idx)
+                    frame_idx+= 1
+                data = self._add_video(
+                    data, 
+                    future_frames,
+                    future_frame_indexes,
+                    need_loss=True, 
+                    need_vae=False, 
+                )
+                
                 if len(data) == 0:
                     continue
                 # Add logger for debugging
                 if row_idx <= self.n_log_examples:
                     # Create side-by-side full_example with text
-                    self.save_example_image(condition_image, edited_image, edit_instruction, row_idx)
+                    self.save_example_multi_image(frames, future_frames, edit_instruction, row_idx, self.image_key_list)
                 data['data_indexes'] = {
                     "data_indexes": row_idx,
                     "worker_id": worker_id,

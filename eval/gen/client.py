@@ -4,26 +4,38 @@ import numpy as np
 from msgpack_numpy import Packer, unpackb
 
 ur5_cleaning_text =[
-    'pick up yellow cup',
-    "put yellow cup in bin",
+    # 'pick up yellow cup',
+    # "put yellow cup in bin",
+    "pick up orange short cup",
+    # "pick up orange plate",
+    "pick up spoon next to the tall yellow cup",
+    # "pick up aluminum foil tray",
+    # "pick up plastic bottle",
     "pick up chopstick",
-    "put chopstick in bin",
-    "pick up foil tray",
-    "throw away foil tray",
-    "pick up orange plate",
-    "put orange plate in bin",
-    "pick up blue bowl",
-    "throw away blue bowl",
+    # "pick up blue bowl",
+    # "pick up black food container",
+    # # "put chopstick in bin",
+    "pick up the square plastic lid",
+    # "throw away foil tray",
+    # "pick up beige plate",
+    # "put orange plate in bin",
+    # "pick up orange wrapper",
+    # "put blue bowl in bin",
+    # "bus the table",
 ]
+
+
+packer = Packer()
+
 async def connect_and_send():
-    uri = "ws://localhost:8788"
+    uri = "ws://0.0.0.0:8000"
     try:
         # Increase the timeout time by setting ping_interval and ping_timweout
         async with websockets.connect(uri, ping_interval=20, ping_timeout=12000) as ws:
 
             from PIL import Image
 
-            source_image_path = "roll_outs/ur5s4_b0_source.png"
+            source_image_path = "roll_outs/drop_bowl.png"
 
             # First image generation call 
             # Convert the image to a numpy array
@@ -34,8 +46,13 @@ async def connect_and_send():
                     "observation/base_0_camera/rgb/image": source_image,
                     "raw_text": ur5_cleaning_text[i],
                 }
-                packer = Packer()
-                data = packer.pack(inputs)
+                
+                args = (inputs,) 
+                kwargs = {
+                    "cfg_text_scale": 4.0,
+                    "cfg_img_scale": 1.5
+                }
+                data = packer.pack((args, kwargs))
 
                 import time
                 start_time = time.time()
@@ -44,27 +61,13 @@ async def connect_and_send():
                 end_time = time.time()
                 print(f"Time taken for sending and receiving: {end_time - start_time} seconds")
                 output = unpackb(response)
-                target_image_path = f"roll_outs/ur5s4_b0_edited_{i}.png"
+                prompt = ur5_cleaning_text[i].replace(" ", "_")
+                target_image_path = f"roll_outs/ur5s4_b0_edited_{i}_{prompt}.png"
                 output_image = Image.fromarray(output['future/observation/base_0_camera/rgb/image'])
                 output_image.save(target_image_path)
                 print(f"Image saved as {target_image_path}")
-                source_image_path = target_image_path
-        
-            # # Second image generation call 
-            # inputs = {
-            #     "observation/base_0_camera/rgb/image": output['future/observation/base_0_camera/rgb/image'],
-            #     "raw_text": "make her dress green",
-            # }
-            # packer = Packer()
-            # data = packer.pack(inputs)
-
-            # await ws.send(data)
-            # response = await ws.recv()
-            # output = unpackb(response)
-            # output_image = Image.fromarray(output['future/observation/base_0_camera/rgb/image'])
-            # output_image.save("output2.png")
-            # print("Image saved as output2.png")
-
+                # source_image_path = target_image_path
+    
     except websockets.ConnectionClosedOK:
         print("Server closed the connection – goodbye!")
     except websockets.ConnectionClosedError as e:

@@ -325,6 +325,7 @@ class PackedDataset(torch.utils.data.IterableDataset):
 
         for item in sequence_plan:
             split_start = item.get('split_start', True)
+            split_end = item.get('split_end', True)
             if split_start:
                 curr_split_len = 0
 
@@ -407,9 +408,10 @@ class PackedDataset(torch.utils.data.IterableDataset):
             elif item['type'] == 'vae_image':
                 image_tensor = image_tensor_list.pop(0)
                 if item['enable_cfg'] == 1 and random.random() < self.data_config.vae_cond_dropout_prob:
-                    # FIXME fix vae dropout in video2video setting.
-                    curr_rope_id += 1
-                    continue
+                    if split_start and split_end:
+                        # FIXME fix vae dropout in video2video setting.
+                        curr_rope_id += 1
+                        continue
 
                 # add a <|startofimage|> token
                 sequence_status['packed_text_ids'].append(self.start_of_image)
@@ -467,7 +469,7 @@ class PackedDataset(torch.utils.data.IterableDataset):
                 elif item['loss'] == 0:
                     curr_rope_id += 1
 
-            if item.get('split_end', True):
+            if split_end:
                 split_lens.append(curr_split_len)
                 sample_lens += curr_split_len
 
