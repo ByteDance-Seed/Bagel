@@ -7,16 +7,18 @@ num_nodes=1
 node_rank=0
 master_addr=localhost
 master_port=29500
-resume_from=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-7B-MoT
-# resume_from=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-small-fake
-GPUS=8
-total_gpus=$((num_nodes * GPUS))
-# Fine-tuning
-  # --resume-from $resume_from \
+# model_path=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-7B-MoT
+model_path=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-small-fake
+  # --resume-from $model_path \
+# resume_from=$model_path
+resume_from=None
+GPUS=1
+
 
 batch_size=1
-seq_len=32768
-
+seq_len=10240
+  # --resume-from $resume_from \
+# Fine-tuning
 PYTHONPATH=. torchrun \
   --nnodes=$num_nodes \
   --node_rank=$node_rank \
@@ -24,13 +26,14 @@ PYTHONPATH=. torchrun \
   --master_addr=$master_addr \
   --master_port=$master_port \
   train/pretrain_unified_navit.py \
-  --dataset_config_file ./data/configs/SEED_part2_arx_50step_448.yaml \
+  --dataset_config_file ./data/configs/seedp1_0.2_arx_biarm_allview_endspan.yaml \
+  --model_path $model_path \
   --layer_module Qwen2MoTDecoderLayer \
-  --model_path $resume_from \
   --max_latent_size 64 \
   --finetune_from_hf True \
   --auto_resume True \
   --resume-model-only True \
+  --exp-checkpoint-dir /mnt/weka/checkpoints/liliyu/bagel \
   --finetune-from-ema True \
   --log_every 1 \
   --lr 2e-5 \
@@ -39,9 +42,9 @@ PYTHONPATH=. torchrun \
   --max_num_tokens $seq_len \
   --max_num_tokens_per_sample $seq_len \
   --batch_size $batch_size \
-  --wandb_name test_pi_arx_50step_gpu${total_gpus}_seq${seq_len} \
+  --exp_name debug_allview_video7 \
   --wandb_runid 1 \
   --num_shard $GPUS \
   --visual_und False \
-  --use_flex True \
   --save_every 10
+

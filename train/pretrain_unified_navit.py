@@ -132,6 +132,10 @@ class DataArguments:
         default=16384,
         metadata={"help": "Maximum tokens allowed in one raw sample; longer samples are skipped."}
     )
+    batch_size: int = field(
+        default=16,
+        metadata={"help": "Batch size for training."}
+    )
     max_num_tokens: int = field(
         default=36864,
         metadata={"help": "Hard limit on tokens in a packed batch; flush if adding a sample would exceed it."}
@@ -163,19 +167,19 @@ class TrainingArguments:
     )
 
     # --- bookkeeping & logging ---
-    results_dir: str = field(
+    exp_checkpoint_dir: str = field(
         default="results",
         metadata={"help": "Root directory for logs."}
     )
     checkpoint_dir: str = field(
-        default="results/checkpoints",
+        default="results",
         metadata={"help": "Root directory for model checkpoints."}
     )
     wandb_project: str = field(
         default="bagel",
         metadata={"help": "Weights & Biases project name."}
     )
-    wandb_name: str = field(
+    exp_name: str = field(
         default="run",
         metadata={"help": "Name shown in the Weights & Biases UI for this run."}
     )
@@ -224,17 +228,17 @@ class TrainingArguments:
         metadata={"help": "Print / log every N training steps."}
     )
     save_every: int = field(
-        default=2000,
+        default=1000,
         metadata={"help": "Save a checkpoint every N training steps."}
     )
     total_steps: int = field(
-        default=500_000,
+        default=50_000,
         metadata={"help": "Total number of optimizer steps to train for."}
     )
 
     # --- optimization & scheduler ---
     warmup_steps: int = field(
-        default=2000,
+        default=1000,
         metadata={"help": "Linear warm-up steps before applying the main LR schedule."}
     )
     lr_scheduler: str = field(
@@ -347,24 +351,31 @@ def main():
     parser = HfArgumentParser((ModelArguments, DataArguments, TrainingArguments))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
+    training_args.checkpoint_dir = os.path.join(training_args.exp_checkpoint_dir, training_args.exp_name, "checkpoints")
+    training_args.exp_checkpoint_dir = os.path.join(training_args.exp_checkpoint_dir, training_args.exp_name)
+
     # Setup logging:
+    experiment_id = f"{training_args.exp_name}-run{training_args.wandb_runid}"
+
     if dist.get_rank() == 0:
-        os.makedirs(training_args.results_dir, exist_ok=True)
+        os.makedirs(training_args.exp_checkpoint_dir, exist_ok=True)
         os.makedirs(training_args.checkpoint_dir, exist_ok=True)
-        logger = create_logger(training_args.results_dir, dist.get_rank())
+        logger = create_logger(training_args.exp_checkpoint_dir, dist.get_rank())
         wandb.init(
             project=training_args.wandb_project, 
-            id=f"{training_args.wandb_name}-run{training_args.wandb_runid}", 
-            name=training_args.wandb_name, 
+            id=experiment_id, 
+            name=experiment_id, 
             resume=training_args.wandb_resume,
             mode="offline" if training_args.wandb_offline else "online"
         )
-        wandb.config.update(training_args)
+        wandb.config.update(training_args, allow_val_change=True)
         wandb.config.update(model_args)
         wandb.config.update(data_args)
     else:
         logger = create_logger(None, dist.get_rank())
     dist.barrier()
+    logger.info(f'========== Launching experiment: {experiment_id} ==========' )
+
     logger.info(f'Training arguments {training_args}')
     logger.info(f'Model arguments {model_args}')
     logger.info(f'Data arguments {data_args}')
@@ -389,6 +400,7 @@ def main():
             finetune_from_ema = training_args.finetune_from_ema
         else:
             finetune_from_ema = False
+    print('resume_from trained checkpoints: ', resume_from)
 
     # Set seed:
     seed = training_args.global_seed * dist.get_world_size() + dist.get_rank()
@@ -483,6 +495,7 @@ def main():
     model, ema_model = FSDPCheckpoint.try_load_ckpt(
         resume_from, logger, model, ema_model, resume_from_ema=finetune_from_ema
     )
+
     ema_model = fsdp_ema_setup(ema_model, fsdp_config)
     fsdp_model = fsdp_wrapper(model, fsdp_config)
     apply_activation_checkpointing(
@@ -492,6 +505,7 @@ def main():
         ), 
         check_fn=grad_checkpoint_check_fn
     )
+
 
     if dist.get_rank() == 0:
         print(fsdp_model)
@@ -530,8 +544,16 @@ def main():
         )
 
     # Setup packed dataloader
+    # Save a copy to results dir
+    dst_config = os.path.join(training_args.exp_checkpoint_dir, os.path.basename(data_args.dataset_config_file))
+    if dist.get_rank() == 0:
+        import shutil
+        shutil.copy2(data_args.dataset_config_file, dst_config)
     with open(data_args.dataset_config_file, "r") as stream:
         dataset_meta = yaml.safe_load(stream)
+        print('dataset_meta', dataset_meta)
+    
+    print(dataset_meta)
     dataset_config = DataConfig(grouped_datasets=dataset_meta)
     if training_args.visual_und:
         dataset_config.vit_patch_size = model_args.vit_patch_size
@@ -543,6 +565,9 @@ def main():
         dataset_config.text_cond_dropout_prob = model_args.text_cond_dropout_prob
         dataset_config.vae_cond_dropout_prob = model_args.vae_cond_dropout_prob
         dataset_config.vit_cond_dropout_prob = model_args.vit_cond_dropout_prob
+
+    
+    print('dataset_config', dataset_config)
     train_dataset = PackedDataset(
         dataset_config,
         tokenizer=tokenizer,
@@ -558,11 +583,12 @@ def main():
         interpolate_pos=model_args.interpolate_pos,
         use_flex=training_args.use_flex,
         data_status=data_status,
+        experiment_name=training_args.exp_name,
     )
     train_dataset.set_epoch(data_args.data_seed)
     train_loader = DataLoader(
         train_dataset,
-        batch_size=1, # batch size is 1 packed dataset
+        batch_size=data_args.batch_size, # batch size is 1 packed dataset
         num_workers=data_args.num_workers,
         pin_memory=True,
         collate_fn=collate_wrapper(),
@@ -576,6 +602,8 @@ def main():
     fsdp_model.train()
     ema_model.eval()
 
+    
+
     # train loop
     start_time = time()
     logger.info(f"Training for {training_args.total_steps} steps, starting at {train_step}...")
@@ -586,7 +614,15 @@ def main():
         with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
             if training_args.visual_gen:
                 with torch.no_grad():
-                    data['padded_latent'] = vae_model.encode(data.pop('padded_images'))
+                    padded_images = data.pop('padded_images')
+                    data['padded_latent'] = vae_model.encode(padded_images)
+                    # from PIL import Image
+                    # import numpy as np
+                    # img1 = padded_images[0].cpu().numpy().transpose(1,2,0)
+                    # breakpoint()
+                    # img1 = (img1 + 1) * 127.5
+                    # img1 = img1.astype(np.uint8)
+                    # Image.fromarray(img1).save("img1.png")\
             loss_dict = fsdp_model(**data)
 
         loss = 0
@@ -653,6 +689,7 @@ def main():
             wandb_log['total_ce_tokens'] = total_ce_tokens.item()
             wandb_log['total_norm'] = total_norm.item()
             wandb_log['total_samples'] = total_samples.item()
+            wandb_log['steps_per_sec'] = steps_per_sec
 
             mem_allocated = torch.tensor(torch.cuda.max_memory_allocated() / 1024**2, device=device)
             dist.all_reduce(mem_allocated, op=dist.ReduceOp.MAX)
@@ -672,7 +709,12 @@ def main():
                 data_status[item['dataset_name']] = {}
             data_status[item['dataset_name']][item['worker_id']] = item['data_indexes']
 
-        if curr_step > 0 and curr_step % training_args.save_every == 0:
+        if curr_step == 10 and dist.get_rank() == 0:
+            for dataset in train_dataset.grouped_datasets:
+                if dataset.data_table is not None:
+                    wandb.log({"data_table": dataset.data_table})
+
+        if curr_step % training_args.save_every == 0:
             if dist.get_rank() == 0:
                 gather_list = [None] * dist.get_world_size()
             else:
@@ -688,7 +730,8 @@ def main():
                 scheduler=scheduler, 
                 logger=logger,
                 fsdp_config=fsdp_config,
-                data_status=gather_list
+                data_status=gather_list,
+                save_bf16=True,
             )
 
     logger.info("Done!")

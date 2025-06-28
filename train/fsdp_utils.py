@@ -95,6 +95,7 @@ class FSDPCheckpoint:
         data_status,
         logger, 
         fsdp_config,
+        save_bf16=False,
     ):
         save_path = os.path.join(ckpt_dir, f"{train_steps:07d}")
         os.makedirs(save_path, exist_ok=True)
@@ -107,6 +108,8 @@ class FSDPCheckpoint:
                 FullStateDictConfig(rank0_only=True, offload_to_cpu=True),
             ):
                 ema_state_dict = ema_model.state_dict()
+                if save_bf16:
+                    ema_state_dict = {k: v.to(torch.bfloat16) if v.dtype == torch.float32 else v for k, v in ema_state_dict.items()}
                 if dist.get_rank() == 0:
                     save_file(ema_state_dict, os.path.join(save_path, "ema.safetensors"))
 
@@ -116,6 +119,8 @@ class FSDPCheckpoint:
             FullStateDictConfig(rank0_only=True, offload_to_cpu=True),
         ):
             model_state_dict = model.state_dict()
+            if save_bf16:
+                model_state_dict = {k: v.to(torch.bfloat16) if v.dtype == torch.float32 else v for k, v in model_state_dict.items()}
             if dist.get_rank() == 0:
                 save_file(model_state_dict, os.path.join(save_path, "model.safetensors"))
 
@@ -160,8 +165,10 @@ class FSDPCheckpoint:
             model_state_dict = load_file(model_state_dict_path, device="cpu")
             # NOTE position embeds are fixed sinusoidal embeddings, so we can just pop it off,
             # which makes it easier to adapt to different resolutions.
-            model_state_dict.pop('latent_pos_embed.pos_embed')
-            model_state_dict.pop('vit_pos_embed.pos_embed')
+            if 'latent_pos_embed.pos_embed' in model_state_dict:
+                model_state_dict.pop('latent_pos_embed.pos_embed')
+            if 'vit_pos_embed.pos_embed' in model_state_dict:
+                model_state_dict.pop('vit_pos_embed.pos_embed')
             msg = model.load_state_dict(model_state_dict, strict=False)
             logger.info(msg)
             del model_state_dict
@@ -174,8 +181,10 @@ class FSDPCheckpoint:
                 ema_state_dict = load_file(ema_state_dict_path, device="cpu")
                 # NOTE position embeds are fixed sinusoidal embeddings, so we can just pop it off,
                 # which makes it easier to adapt to different resolutions.
-                ema_state_dict.pop('latent_pos_embed.pos_embed')
-                ema_state_dict.pop('vit_pos_embed.pos_embed')
+                if 'latent_pos_embed.pos_embed' in ema_state_dict:  
+                    ema_state_dict.pop('latent_pos_embed.pos_embed')
+                if 'vit_pos_embed.pos_embed' in ema_state_dict:
+                    ema_state_dict.pop('vit_pos_embed.pos_embed')
                 msg = ema_model.load_state_dict(ema_state_dict, strict=False)
                 logger.info(msg)
                 del ema_state_dict

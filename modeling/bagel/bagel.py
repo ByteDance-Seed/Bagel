@@ -486,6 +486,87 @@ class Bagel(PreTrainedModel):
 
         return generation_input, newlens, new_rope
 
+
+
+
+    def prepare_vae_videos(self, curr_kvlens, curr_rope, videos, transforms, new_token_ids, timestep=0):
+        patchified_vae_latent_shapes, packed_vae_position_ids = list(), list()
+        packed_vae_token_indexes = list()
+        packed_text_ids, packed_text_indexes = list(), list()
+        packed_seqlens, packed_position_ids, packed_indexes = list(), list(), list()
+        packed_key_value_indexes = list()
+
+        _curr = curr = 0
+        vae_image_tensors = list()
+        newlens, new_rope = list(), list()
+        for video, curr_kvlen, curr_position_id in zip(videos, curr_kvlens, curr_rope):
+            packed_key_value_indexes.extend(range(curr, curr + curr_kvlen))
+            curr += curr_kvlen
+            video_len = 0
+            for image in video:
+
+                packed_text_ids.append(new_token_ids['start_of_image'])
+                packed_text_indexes.append(_curr)
+                packed_indexes.append(curr)
+                curr += 1
+                _curr += 1
+
+                image_tensor = transforms(image)
+                vae_image_tensors.append(image_tensor)
+                vae_posiiton_ids = self.get_flattened_position_ids(
+                    image_tensor.size(1), image_tensor.size(2),
+                    self.latent_downsample, 
+                    max_num_patches_per_side=self.max_latent_size
+                )
+                packed_vae_position_ids.append(vae_posiiton_ids) #should i extend here 
+                H, W = image_tensor.shape[1:]
+                h = H // self.latent_downsample
+                w = W // self.latent_downsample
+                patchified_vae_latent_shapes.append((h, w))
+
+                num_img_tokens = w * h
+                packed_vae_token_indexes.extend(range(_curr, _curr + num_img_tokens))
+                packed_indexes.extend(range(curr, curr + num_img_tokens))
+                curr += num_img_tokens
+                _curr += num_img_tokens
+
+                packed_text_ids.append(new_token_ids['end_of_image'])
+                packed_text_indexes.append(_curr)
+                packed_indexes.append(curr)
+                curr += 1
+                _curr += 1
+
+                packed_position_ids.extend([curr_position_id] * (num_img_tokens + 2))
+                curr_position_id += 1
+                video_len += num_img_tokens + 2
+            packed_seqlens.append(video_len)
+            newlens.append(curr_kvlen + video_len)
+            new_rope.append(curr_position_id)
+
+        image_sizes = [item.shape for item in vae_image_tensors]
+        max_image_size = [max(item) for item in list(zip(*image_sizes))]
+        padded_images = torch.zeros(size=(len(vae_image_tensors), *max_image_size))
+        for i, image_tensor in enumerate(vae_image_tensors):
+            padded_images[i, :, :image_tensor.shape[1], :image_tensor.shape[2]] = image_tensor
+
+        generation_input = {
+            "padded_images": padded_images,
+            "patchified_vae_latent_shapes": patchified_vae_latent_shapes,
+            "packed_vae_position_ids": torch.cat(packed_vae_position_ids, dim=0),
+            "packed_timesteps": torch.tensor([timestep]),
+            "packed_vae_token_indexes": torch.tensor(packed_vae_token_indexes, dtype=torch.long),
+            "packed_text_ids": torch.tensor(packed_text_ids, dtype=torch.long),
+            "packed_text_indexes": torch.tensor(packed_text_indexes, dtype=torch.long),
+            "packed_position_ids": torch.tensor(packed_position_ids, dtype=torch.long),
+            "packed_seqlens": torch.tensor(packed_seqlens, dtype=torch.int),
+            "packed_indexes": torch.tensor(packed_indexes, dtype=torch.long),
+            "packed_key_value_indexes": torch.tensor(packed_key_value_indexes, dtype=torch.long),
+            "key_values_lens": torch.tensor(curr_kvlens, dtype=torch.int),
+        }
+
+        return generation_input, newlens, new_rope
+
+
     @torch.no_grad
     def forward_cache_update_vae(
         self,
@@ -606,6 +687,105 @@ class Bagel(PreTrainedModel):
 
         return generation_input
 
+
+    def prepare_video_vae_latent(self, curr_kvlens, curr_rope, video_sizes, new_token_ids):
+        packed_text_ids, packed_text_indexes = list(), list()
+        packed_vae_position_ids, packed_vae_token_indexes, packed_init_noises = list(), list(), list()
+        packed_position_ids, packed_seqlens, packed_indexes = list(), list(), list()
+        packed_key_value_indexes = list()
+
+        query_curr = curr = 0
+        for video_size, curr_kvlen, curr_position_id in zip(video_sizes, curr_kvlens, curr_rope):
+            packed_key_value_indexes.extend(range(curr, curr + curr_kvlen))
+            curr += curr_kvlen
+            video_len = 0
+            for H, W in video_size:
+                packed_text_ids.append(new_token_ids['start_of_image'])
+                packed_text_indexes.append(query_curr)
+                packed_indexes.append(curr)
+                curr += 1
+                query_curr += 1
+
+                vae_posiiton_ids = self.get_flattened_position_ids(
+                    H, W,
+                    self.latent_downsample, 
+                    max_num_patches_per_side=self.max_latent_size
+                )
+                packed_vae_position_ids.append(vae_posiiton_ids)
+
+                h, w = H // self.latent_downsample, W // self.latent_downsample
+                num_image_tokens = h * w
+                packed_init_noises.append(
+                    torch.randn(num_image_tokens, self.latent_channel * self.latent_patch_size ** 2)
+                )
+                packed_vae_token_indexes.extend(range(query_curr, query_curr + num_image_tokens))
+                packed_indexes.extend(range(curr, curr + num_image_tokens))
+                curr += num_image_tokens
+                query_curr += num_image_tokens
+
+                packed_text_ids.append(new_token_ids['end_of_image'])
+                packed_text_indexes.append(query_curr)
+                packed_indexes.append(curr)
+                curr += 1
+                query_curr += 1
+
+                packed_position_ids.extend([curr_position_id] * (num_image_tokens + 2))
+                curr_position_id += 1
+                video_len += num_image_tokens + 2
+            packed_seqlens.append(video_len)
+
+        generation_input = {
+            "packed_text_ids": torch.tensor(packed_text_ids, dtype=torch.long),
+            "packed_text_indexes": torch.tensor(packed_text_indexes, dtype=torch.long),
+            "packed_init_noises": torch.cat(packed_init_noises, dim=0),
+            "packed_vae_position_ids": torch.cat(packed_vae_position_ids, dim=0),
+            "packed_vae_token_indexes": torch.tensor(packed_vae_token_indexes, dtype=torch.long),
+            "packed_seqlens": torch.tensor(packed_seqlens, dtype=torch.int),
+            "packed_position_ids": torch.tensor(packed_position_ids, dtype=torch.long),
+            "key_values_lens": torch.tensor(curr_kvlens, dtype=torch.int),
+            "packed_indexes": torch.tensor(packed_indexes, dtype=torch.long),
+            "packed_key_value_indexes": torch.tensor(packed_key_value_indexes, dtype=torch.long),
+        }
+
+        return generation_input
+
+
+    def prepare_video_vae_latent_cfg(self, curr_kvlens, curr_rope, video_sizes):
+        packed_position_ids, packed_indexes, packed_key_value_indexes = list(), list(), list()
+
+        query_curr = curr = 0
+        for video_size, curr_kvlen, curr_position_id in zip(video_sizes, curr_kvlens, curr_rope):
+            packed_key_value_indexes.extend(range(curr, curr + curr_kvlen))
+            curr += curr_kvlen
+            for H, W in video_size:
+
+                packed_indexes.append(curr)
+                curr += 1
+                query_curr += 1
+
+                h, w = H // self.latent_downsample, W // self.latent_downsample
+                num_image_tokens = h * w
+                packed_indexes.extend(range(curr, curr + num_image_tokens))
+                curr += num_image_tokens
+                query_curr += num_image_tokens
+
+                packed_indexes.append(curr)
+                curr += 1
+                query_curr += 1
+
+                packed_position_ids.extend([curr_position_id] * (num_image_tokens + 2))
+                curr_position_id += 1
+                
+        generation_input = {
+            "cfg_packed_position_ids": torch.tensor(packed_position_ids, dtype=torch.long),
+            "cfg_key_values_lens": torch.tensor(curr_kvlens, dtype=torch.int),
+            "cfg_packed_query_indexes": torch.tensor(packed_indexes, dtype=torch.long),
+            "cfg_packed_key_value_indexes": torch.tensor(packed_key_value_indexes, dtype=torch.long),
+        }
+
+        return generation_input
+
+
     def prepare_vae_latent_cfg(self, curr_kvlens, curr_rope, image_sizes):
         packed_position_ids, packed_indexes, packed_key_value_indexes = list(), list(), list()
 
@@ -673,6 +853,7 @@ class Bagel(PreTrainedModel):
         cfg_img_key_values_lens: Optional[torch.IntTensor] = None,
         cfg_img_packed_key_value_indexes: Optional[torch.LongTensor] = None,
         cfg_type: str = "parallel",
+        n_images: int = 1,
     ):
         x_t = packed_init_noises
 
@@ -724,7 +905,7 @@ class Bagel(PreTrainedModel):
 
             x_t = x_t - v_t.to(x_t.device) * dts[i] # velocity pointing from data to noise
 
-        unpacked_latent = x_t.split((packed_seqlens - 2).tolist())
+        unpacked_latent = x_t.split((packed_seqlens - 2*n_images).tolist())
         return unpacked_latent
 
     @torch.no_grad

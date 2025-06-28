@@ -3,15 +3,31 @@
 
 set -x
 
-model_path=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-small-fake
+# model_path=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-small-fake
 model_path=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-7B-MoT
 
 GPUS=8
-task_name=arx_endspan
-image_key=image_0
+image_key=all_views
 resolution=224
-exp_name=pi_arx_100step_seedp1_gpu8_seq32768
-ckpt=0033000
+
+# exp_name=pi_arx_single_allview_seq_seedp1_gpu16_seq16384
+# task_name=arx_endspan_lang
+# image_list_str="image_0,image_2"
+
+# exp_name=pi_ur5e4_b0_allview_seq_seedp1_gpu16_seq16384
+# task_name=ur5e4_endspan_lang
+# image_list_str="image_0,image_2"
+
+# exp_name=pi_ur5e4_b1_allview_seq_seedp1_gpu16_seq16384
+# task_name=ur5e4_b1_endspan_lang
+# image_list_str="image_0,image_2"
+ckpt=0020000
+
+exp_name=pi_arx_biarm_allview_seq_seedp1_gpu16_seq16384
+task_name=arx_biarm_endspan_lang
+image_list_str="image_0,image_2,image_3"
+ckpt=0015000
+
 mode=raw
 wandb_project_name=bagel-edit-eval
 
@@ -22,10 +38,10 @@ PYTHONPATH=. torchrun \
     --nproc_per_node=$GPUS \
     --master_addr=127.0.0.1 \
     --master_port=12345 \
-    ./eval/gen/gen_images_edit_ddp.py \
+    ./eval/gen/gen_images_edit_allviews_ddp.py \
     --model-path $model_path \
     --task_name $task_name \
-    --image_key $image_key \
+    --image_list_str $image_list_str \
     --resolution $resolution \
     --run_name $exp_name  \
     --checkpoint_step ${ckpt} \
