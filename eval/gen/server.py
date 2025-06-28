@@ -13,7 +13,8 @@ from accelerate.utils import BnbQuantizationConfig, load_and_quantize_model
 
 from data.data_utils import add_special_tokens, pil_img2rgb
 from data.transforms import ImageTransform
-from inferencer import InterleaveInferencer
+# from inferencer import InterleaveInferencer
+from inferencer_video_ddp  import InterleaveInferencer
 from modeling.autoencoder import load_ae
 from modeling.bagel.qwen2_navit import NaiveCache
 from modeling.bagel import (
@@ -52,7 +53,7 @@ def prepare_model(weights_path: str, mode: int):
 
     config = BagelConfig(
         visual_gen=True,
-        visual_und=False,
+        visual_und=False,  # TODO: this can change due to the different model
         llm_config=llm_config, 
         vit_config=vit_config,
         vae_config=vae_config,
@@ -139,7 +140,7 @@ def prepare_model(weights_path: str, mode: int):
         ).eval()
     else:
         raise NotImplementedError
-
+    
     print("===================  Model loaded successfully  ==============")
 
     # Inferencer Preparing 
@@ -182,24 +183,36 @@ inference_hyper = dict(
 packer = Packer()
 
 
+image_key_map = {
+    "image_0": "observation/base_0_camera/rgb/image",
+    "image_1": "observation/base_1_camera/rgb/image",
+    "image_2": "observation/left_wrist_0_camera/rgb/image",
+    "image_3": "observation/right_wrist_0_camera/rgb/image",
+}
+
 #### SERVER SIDE ####
-async def handler(websocket, inferencer):
+async def handler(websocket, inferencer, image_keys):
     try:
         logger.info(f"Connection from {websocket.remote_address} opened")
         
         def infer(inputs: dict, cfg_text_scale=4.0, cfg_img_scale=1.5) -> dict:
             set_seed(42)
-            source_image = Image.fromarray(inputs['observation/base_0_camera/rgb/image'])
-            source_image.save("ur5s4_b1_source.png")
+            
+            source_images = [Image.fromarray(inputs[image_key_map[x]]) for x in image_keys]
+            for i, source_image in enumerate(source_images):
+                source_image.save(f"generation_inspect/ur5s4_b1_source_{i}.png")
             prompt = inputs['raw_text']
             print(prompt)
-            inference_hyper['cfg_text_scale'] = cfg_text_scale
+            inference_hyper['cfg_text_scale'] = cfg_text_scale-0
             inference_hyper['cfg_img_scale'] = cfg_img_scale
-            output_dict = inferencer(image=source_image, text=prompt, **inference_hyper)
+            image_list = inferencer.multiview_image_editing(source_images, prompt,  **inference_hyper)
+            # output_dict = inferencer(image=image_list, text=prompt, **inference_hyper)
             prompt = prompt.replace(" ", "_")
-            output_dict['image'].save(f"ur5s4_b1_edited_{prompt}.png")
+            for i, image in enumerate(image_list):
+                image.save(f"generation_inspect/ur5s4_b1_edited_{prompt}_{i}.png")
             outputs = {}
-            outputs["future/observation/base_0_camera/rgb/image"] = np.array(output_dict['image'])
+            for image_key, image in zip(image_keys, image_list):
+                outputs[f"future/{image_key_map[image_key]}"] = np.array(image)
             return outputs
 
         logger.info("Model loaded.")
@@ -231,17 +244,20 @@ async def main(args):
     Starts the WebSocket server.
     """
     inferencer = prepare_model(args.weights_path, args.mode)
+    image_keys = [x.strip() for x in args.image_key_str.split(",")]
+    print(f"inferencing with image keys: {image_keys}")
 
     print(f"Starting WebSocket server on ws://localhost:{args.port}")
     # async with websockets.serve(ft.partial(handler, ckpt_dir=args.weights_path), "0.0.0.0", args.port, compression=None, max_size=None) as server:
     #     await server.wait_closed()  # Run forever
-    async with websockets.serve(ft.partial(handler, inferencer=inferencer), "0.0.0.0", args.port, compression=None, max_size=None) as server:
+    async with websockets.serve(ft.partial(handler, inferencer=inferencer, image_keys=image_keys), "0.0.0.0", args.port, compression=None, max_size=None) as server:
         await server.wait_closed()  # Run forever
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser() 
-    parser.add_argument("--weights_path", type=str, default="/home/liliyu/workspace/BAGEL/results/pi_ur5e4_b1_endspan_lang_seedp1_gpu8_seq16384/checkpoints/0030000")
+    parser.add_argument("--weights_path", type=str, default="results/pi_ur5e4_b1_allview_seq_seedp1_gpu16_seq16384/checkpoints/0040000/")
     parser.add_argument("--mode", type=int, default=1)
+    parser.add_argument("--image_key_str", type=str, default="image_0,image_2")
     parser.add_argument("--port", type=int, default=8767)
     args = parser.parse_args()
     asyncio.run(main(args))

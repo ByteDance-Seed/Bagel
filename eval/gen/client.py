@@ -55,13 +55,14 @@ async def connect_and_send():
 
             from PIL import Image
 
-            source_image_path = "roll_outs_mode2/at_bowl.png"
+            source_image_path = "roll_outs/drop_bowl.png"
 
             for i, editing_instruction in enumerate(editing_command):
                 source_image = np.array(Image.open(source_image_path).resize((224, 224)))
             
                 inputs = {
                     "observation/base_0_camera/rgb/image": source_image,
+                    "observation/left_wrist_0_camera/rgb/image": source_image,
                     "raw_text": editing_instruction,
                 }
                 args = (inputs,) 
@@ -83,7 +84,7 @@ async def connect_and_send():
                 prompt = editing_instruction.replace(" ", "_")
                 if ROLL_OUT:
                     prompt = f"turn{i}_{prompt}"
-                target_image_path = f"roll_outs_mode2/ur5s4_b0_edited_{prompt}.png"
+                target_image_path = f"roll_outs_test/ur5s4_b0_edited_{prompt}.png"
                 output_image = Image.fromarray(output['future/observation/base_0_camera/rgb/image'])
                 output_image.save(target_image_path)
                 print(f"Image saved as {target_image_path}")

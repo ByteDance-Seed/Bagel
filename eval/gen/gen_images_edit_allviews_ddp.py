@@ -34,9 +34,7 @@ from typing import (
 )
 import requests
 from io import BytesIO
-# from inferencer_ddp  import InterleaveInferencer
 from inferencer_video_ddp  import InterleaveInferencer
-
 from PIL import Image
 import torch
 from accelerate import infer_auto_device_map, load_checkpoint_and_dispatch, init_empty_weights
@@ -50,8 +48,9 @@ from modeling.qwen2 import Qwen2Tokenizer
 from modeling.bagel.qwen2_navit import NaiveCache
 from modeling.autoencoder import load_ae
 from safetensors.torch import load_file
+from eval.gen.gen_images_mp_imgedit import editing_image
 import time
-
+import shutil
 
 
 def setup_distributed():
@@ -151,7 +150,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate images using Bagel model.")
     # parser.add_argument("--metadata_file", type=str, default="/home/liliyu/workspace/monopi/monopi/experimental/liliyu/export_wm/arx_leftarm/image_0/prompts.jsonl", help="JSONL file containing lines of metadata for each prompt.")
     parser.add_argument("--task_name", type=str, default="arx_step100")
-    parser.add_argument("--image_key", type=str, default="image_0")
+    parser.add_argument("--image_key", type=str, default="all_views")
+    parser.add_argument("--image_list_str", type=str, default="image_0,image_2")
     parser.add_argument("--num_images", type=int, default=1)
     parser.add_argument("--batch_size", type=int, default=1)
     parser.add_argument("--cfg_scale", type=float, default=1)
@@ -248,6 +248,9 @@ if __name__ == "__main__":
     ################################################################
     # Distributed Inference
     ################################################################
+    image_keys = [k.strip() for k in args.image_list_str.split(",")] 
+    print(f"GPU {rank}: image_keys: {image_keys}")
+    N_images = len(image_keys)
     start_time = time.time()
     outpath = output_dir
     for idx in range(start, end):
@@ -257,64 +260,45 @@ if __name__ == "__main__":
         with open(os.path.join(outpath, "metadata.jsonl"), "w", encoding="utf-8") as fp:
             json.dump(metadata, fp)
 
-        prompt = metadata['instruction']
-        source_image = Image.open(metadata['source_image']).resize(inference_hyper['image_shapes'])
-        if "target_image" in metadata:  
-            target_image = Image.open(metadata['target_image']).resize(inference_hyper['image_shapes'])
-            
-        else:
-            target_image = None
-        flag = False
-        for idx in range(args.num_images):
-            if not os.path.exists(os.path.join(outpath, f"{idx:05}.png")):
-                flag = False
-                break
-        if flag:
-            print(f"GPU {rank} skipping generation for prompt: {prompt}")
-            continue
+        prompt = metadata['instruction'].split(";")[1].strip() 
         print(f"GPU {rank} processing prompt {idx - start + 1}/{end - start}: '{prompt}'")
+        
+        source_images = []
+        source_image_paths = []
+        target_image_paths = []
 
-        image_list = inferencer.multiview_image_editing([source_image], prompt, device=device)
-
-        # image_list = []
-        # for i in range(args.num_images // args.batch_size):
-        #     # output_dict = inferencer(image=source_image, text=prompt, device=device, **inference_hyper)
-
-        #     image_list.append(output_dict['image'])
+        for img_path in metadata['source_images']:
+            if sum(img_key in img_path for img_key in image_keys) == 1:
+                source_image_paths.append(img_path)
+                source_images.append(Image.open(img_path).resize(inference_hyper['image_shapes']))
+                target_image_path = img_path.replace("_source_", "_target_")
+                if target_image_path in metadata['target_images']:
+                    target_image_paths.append(target_image_path)
+                else:
+                    target_image_paths.append(None)
+        image_list = inferencer.multiview_image_editing(source_images, prompt, device=device)
 
         sample_count = 0
-        for sample in image_list:
-            sample_count += 1
-            # Crop the generated image
-            print(f"Sample shape: {sample.size}")
-            sample = sample.crop(sample.getbbox())
-            
-            if sample.size[0] != inference_hyper['image_shapes'][0]:
-                resize_sample = sample.resize(inference_hyper['image_shapes'])
-            else:
-                resize_sample = None
+        for i, (sample, source_image, target_image) in enumerate(zip(image_list, source_image_paths, target_image_paths)):
             
             # Save the comparison image
-            img_path = os.path.join(outpath, f"{idx:05}.png")
-            source_image.save(os.path.join(outpath, f"{idx:05}_source.png"))
-            sample.save(os.path.join(outpath, f"{idx:05}_edited.png"))
-            if target_image is not None:
-                target_image.save(os.path.join(outpath, f"{idx:05}_target.png"))
-            if resize_sample is not None:
-                resize_sample.save(os.path.join(outpath, f"{idx:05}_resized.png"))
-            
+            edited_image_path = os.path.join(outpath, f"view{i}_edited.png")
+            sample.save(edited_image_path)
+            shutil.copy(target_image, os.path.join(outpath, f"view{i}_target.png"))
+            shutil.copy(source_image, os.path.join(outpath, f"view{i}_source.png"))
+
+    
     end_time = time.time()
     total_time = end_time - start_time
     num_prompts = end - start
-    
     print(f"\nGPU {rank} Summary:")
     print(f"Total time: {total_time:.2f} seconds")
     print(f"Average time per prompt: {total_time/num_prompts:.2f} seconds")
     print(f"Number of prompts processed: {num_prompts}")
-
     print(f"GPU {rank} has completed all tasks, time cost: {time.time() - start_time} seconds")
     dist.barrier()
     
+
     ################################################################
     # Log images to wandb
     ################################################################    
@@ -333,13 +317,13 @@ if __name__ == "__main__":
             resume="allow"
         )
 
-        columns=["id", "image", "instruction", "edited", "target"]
+        columns=["id", *[f"view{i}" for i in range(N_images)], "instruction",  *[f"edited_{i}" for i in range(N_images)], *[f"target_{i}" for i in range(N_images)]]
         test_table = wandb.Table(columns=columns)
 
 
         all_images =  os.listdir(output_dir)
-        print(f"found images  {all_images}")
-        for img_dir in sorted(os.listdir(output_dir)):
+        print(f"found images {all_images}")
+        for img_dir in sorted(all_images):
             img_dir_path = os.path.join(output_dir, img_dir)
             if os.path.isdir(img_dir_path):
                 # Log images from this directory
@@ -347,13 +331,11 @@ if __name__ == "__main__":
                 with open(metadata_path, "r", encoding="utf-8") as f:
                     metadata = json.load(f)
                     prompt = metadata["instruction"]
-                source_image_path = os.path.join(img_dir_path, "00000_source.png")
-                edited_image_path = os.path.join(img_dir_path, "00000_edited.png")
-                target_image_path = os.path.join(img_dir_path, "00000_target.png")
-                assert os.path.exists(source_image_path)
-                assert os.path.exists(edited_image_path)
-                assert os.path.exists(target_image_path)
-                test_table.add_data(img_dir, wandb.Image(source_image_path), prompt, wandb.Image(edited_image_path), wandb.Image(target_image_path))
+                
+                s_images = [wandb.Image(os.path.join(img_dir_path, f"view{i}_source.png")) for i in range(N_images)]
+                e_images = [wandb.Image(os.path.join(img_dir_path, f"view{i}_edited.png")) for i in range(N_images)]
+                t_images = [wandb.Image(os.path.join(img_dir_path, f"view{i}_target.png")) for i in range(N_images)]
+                test_table.add_data(img_dir, *s_images, prompt, *e_images, *t_images)
         wandb.log({"Editing results" : test_table}, step=int(args.checkpoint_step))
 
 

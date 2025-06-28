@@ -258,7 +258,7 @@ def editing_image_with_think(
 
 
 def editing_image(
-    images, prompt, num_timesteps=50, 
+    images, prompt, gen_model, num_timesteps=50, 
     cfg_text_scale=4.0, cfg_img_scale=2.0,
     cfg_interval=[0, 1.0], cfg_renorm_min=0., 
     cfg_type="serial_text_img", cfg_renorm_type="text_channel", 
@@ -305,14 +305,14 @@ def editing_image(
         with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
             past_key_values = gen_model.forward_cache_update_vit(past_key_values, **generation_input)
 
-    # cfg_text
+    # cfg_text, got image, but no text
     cfg_text_past_key_values = copy.deepcopy(past_key_values)
     generation_input_cfg_text = gen_model.prepare_vae_latent_cfg(
         curr_kvlens=newlens,
         curr_rope=new_rope, 
         image_sizes=[(h, w)], 
     )
-    # cfg_img
+    # cfg_img, got text, but no image
     cfg_img_past_key_values = NaiveCache(gen_model.config.llm_config.num_hidden_layers)
     cfg_img_newlens = [0]
     cfg_img_new_rope = [0]

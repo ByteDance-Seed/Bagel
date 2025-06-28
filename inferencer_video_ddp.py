@@ -108,6 +108,41 @@ class InterleaveInferencer:
         return gen_context
 
     @torch.no_grad()
+    def update_context_video(self, images, gen_context, vae=True, device=None):
+        # used for interleave data, currently only support 1 data inference, 
+        past_key_values = gen_context['past_key_values']
+        kv_lens = gen_context['kv_lens']
+        ropes =  gen_context['ropes']
+
+        # breakpoint()
+
+        # ## update vae
+        # generation_input_test, _, _ = self.model.prepare_vae_images(
+        #     curr_kvlens=kv_lens,
+        #     curr_rope=ropes, 
+        #     images=[images[0]],
+        #     transforms=self.vae_transform, 
+        #     new_token_ids=self.new_token_ids,
+        # )
+        ## update vae
+        generation_input, kv_lens, ropes = self.model.prepare_vae_videos(
+            curr_kvlens=kv_lens,
+            curr_rope=ropes, 
+            videos=[images],
+            transforms=self.vae_transform, 
+            new_token_ids=self.new_token_ids,
+        )
+        generation_input = move_generation_input_to_device(generation_input, device)
+        past_key_values = self.model.forward_cache_update_vae(self.vae_model, past_key_values, **generation_input)
+
+        gen_context['kv_lens'] = kv_lens
+        gen_context['ropes'] = ropes
+        gen_context['past_key_values'] = past_key_values
+        
+        return gen_context
+
+
+    @torch.no_grad()
     def gen_image(
         self, 
         image_shape, 
@@ -128,10 +163,10 @@ class InterleaveInferencer:
         past_key_values = gen_context['past_key_values']
         kv_lens = gen_context['kv_lens']
         ropes = gen_context['ropes']
-        generation_input = self.model.prepare_vae_latent(
+        generation_input = self.model.prepare_video_vae_latent(
             curr_kvlens=kv_lens,
             curr_rope=ropes, 
-            image_sizes=[image_shape], 
+            video_sizes=[image_shape], 
             new_token_ids=self.new_token_ids,
         ) 
         
@@ -139,20 +174,20 @@ class InterleaveInferencer:
         cfg_text_past_key_values = cfg_text_precontext['past_key_values']
         kv_lens_cfg = cfg_text_precontext['kv_lens']
         ropes_cfg = cfg_text_precontext['ropes']
-        generation_input_cfg_text = self.model.prepare_vae_latent_cfg(
+        generation_input_cfg_text = self.model.prepare_video_vae_latent_cfg(
             curr_kvlens=kv_lens_cfg,
             curr_rope=ropes_cfg, 
-            image_sizes=[image_shape], 
+            video_sizes=[image_shape], 
         )
 
         # img cfg
         cfg_img_past_key_values = cfg_img_precontext['past_key_values']
         kv_lens_cfg = cfg_img_precontext['kv_lens']
         ropes_cfg = cfg_img_precontext['ropes']
-        generation_input_cfg_img = self.model.prepare_vae_latent_cfg(
+        generation_input_cfg_img = self.model.prepare_video_vae_latent_cfg(
             curr_kvlens=kv_lens_cfg,
             curr_rope=ropes_cfg, 
-            image_sizes=[image_shape], 
+            video_sizes=[image_shape], 
         )
 
         generation_input = {k: v.to(torch.bfloat16) if v.dtype == torch.float32 else v for k, v in generation_input.items()}
@@ -161,7 +196,7 @@ class InterleaveInferencer:
         generation_input = move_generation_input_to_device(generation_input, device)
         generation_input_cfg_text = move_generation_input_to_device(generation_input_cfg_text, device)
         generation_input_cfg_img = move_generation_input_to_device(generation_input_cfg_img, device)
-        
+
 
         unpacked_latent = self.model.generate_image(
             past_key_values=past_key_values,
@@ -183,10 +218,15 @@ class InterleaveInferencer:
             cfg_img_packed_query_indexes=generation_input_cfg_img['cfg_packed_query_indexes'],
             cfg_img_key_values_lens=generation_input_cfg_img['cfg_key_values_lens'],
             cfg_img_packed_key_value_indexes=generation_input_cfg_img['cfg_packed_key_value_indexes'],
+            n_images=len(image_shape),
         )
 
-        image = self.decode_image(unpacked_latent[0], image_shape)
-        return image
+        images = []
+        for img_latent in unpacked_latent[0].split(196):
+            print(img_latent.shape)
+            images.append(self.decode_image(img_latent, image_shape[0]))
+
+        return images
 
         
     def decode_image(self, latent, image_shape):
@@ -332,3 +372,75 @@ class InterleaveInferencer:
             elif isinstance(i, str):
                 output_dict['text'] = i
         return output_dict
+
+
+
+    @torch.no_grad()
+    def multiview_image_editing(
+        self,
+        images_list: List[Image.Image],
+        text: str,
+        think=False,
+        understanding_output=False,
+        device=None,
+        max_think_token_n=1000,
+        do_sample=False,
+        text_temperature=0.3,
+        cfg_text_scale=3.0,
+        cfg_img_scale=1.5,
+        cfg_interval=[0.4, 1.0],
+        timestep_shift=3.0,
+        num_timesteps=50,
+        cfg_renorm_min=0.0,
+        cfg_renorm_type="global",
+        image_shapes=(1024, 1024),
+    ) -> List[Union[str, Image.Image]]:
+
+        output_list = []
+        gen_context = self.init_gen_context()
+        cfg_text_context = deepcopy(gen_context)
+        cfg_img_context = deepcopy(gen_context)
+
+        with torch.autocast(device_type="cuda", enabled=True, dtype=torch.bfloat16):
+                
+            images = []
+            image_shapes = []
+            for image in images_list:
+                    input_term = self.vae_transform.resize_transform(pil_img2rgb(image))
+                    images.append(input_term)
+                    image_shapes.append(input_term.size[::-1])
+            gen_context = self.update_context_video(images, gen_context,vae=True, device=device)
+            cfg_text_context = deepcopy(gen_context)
+
+            # then do for text
+            cfg_text_context = deepcopy(gen_context)
+            gen_context = self.update_context_text(text, gen_context, device=device)
+            cfg_img_context = self.update_context_text(text, cfg_img_context, device=device)
+
+            if understanding_output:
+                gen_text = self.gen_text(gen_context, do_sample=do_sample, temperature=text_temperature, max_length=max_think_token_n)
+                output_list.append(gen_text)
+
+            else:
+                if think:
+                    gen_text = self.gen_text(gen_context, do_sample=do_sample, temperature=text_temperature, max_length=max_think_token_n)
+                    gen_context = self.update_context_text(gen_text, gen_context)
+                    output_list.append(gen_text)
+
+                images = self.gen_image(
+                    image_shapes, 
+                    gen_context, 
+                    cfg_text_precontext=cfg_text_context, 
+                    cfg_img_precontext=cfg_img_context,
+                    cfg_text_scale=cfg_text_scale, 
+                    cfg_img_scale=cfg_img_scale, 
+                    cfg_interval=cfg_interval, 
+                    timestep_shift=timestep_shift, 
+                    num_timesteps=num_timesteps,
+                    cfg_renorm_min=cfg_renorm_min,
+                    cfg_renorm_type=cfg_renorm_type,
+                    device=device,
+                )
+
+        return images
+    
