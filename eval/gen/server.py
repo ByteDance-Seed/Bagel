@@ -1,5 +1,6 @@
-# Copyright 2025 Bytedance Ltd. and/or its affiliates.
-# SPDX-License-Identifier: Apache-2.0
+"""
+PYTHONPATH=. python eval/gen/server.py  --weights_path /data/bagel_ckpts/pi_arx_biarm_allview_seq_seedp1_gpu16_seq16384/0050000/  --image_save_dir diverse_batch_folding   --image_key_str image_0,image_2,image_3
+"""
 
 import numpy as np
 import os
@@ -169,16 +170,7 @@ def set_seed(seed):
         torch.backends.cudnn.benchmark = False
     return seed
 
-inference_hyper = dict(
-    cfg_text_scale=4.0,
-    cfg_img_scale=1.2,
-    cfg_interval=[0.0, 1.0],
-    timestep_shift=2.0,
-    num_timesteps=50,
-    cfg_renorm_min=0.0,
-    cfg_renorm_type="global",
-    image_shapes=(224, 224),
-)
+
 
 packer = Packer()
 
@@ -186,36 +178,49 @@ packer = Packer()
 image_key_map = {
     "image_0": "observation/base_0_camera/rgb/image",
     "image_1": "observation/base_1_camera/rgb/image",
+    "image_2_ur5": "observation/wrist_0_camera/rgb/image",
     "image_2": "observation/left_wrist_0_camera/rgb/image",
     "image_3": "observation/right_wrist_0_camera/rgb/image",
 }
 
 #### SERVER SIDE ####
-async def handler(websocket, inferencer, image_keys):
+async def handler(websocket, inferencer, image_keys, image_dir, n_timesteps):
     try:
         logger.info(f"Connection from {websocket.remote_address} opened")
-        
-        def infer(inputs: dict, cfg_text_scale=4.0, cfg_img_scale=1.5) -> dict:
+        inference_hyper = dict(
+            cfg_text_scale=5.0,
+            cfg_img_scale=1.2,
+            cfg_interval=[0.0, 1.0],
+            timestep_shift=3.0,
+            num_timesteps=n_timesteps,
+            cfg_renorm_min=0.0,
+            cfg_renorm_type="global",
+            image_shapes=(224, 224),
+        )
+        def infer(inputs: dict, cfg_text_scale=4.0, cfg_img_scale=1.3) -> dict:
             set_seed(42)
-            
+            print(inputs.keys())
+            file_count = len([name for name in os.listdir(image_dir) if os.path.isfile(os.path.join(image_dir, name))])
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             source_images = [Image.fromarray(inputs[image_key_map[x]]) for x in image_keys]
             for i, source_image in enumerate(source_images):
-                source_image.save(f"generation_inspect/ur5s4_b1_source_{i}.png")
+                source_image.save(f"{image_dir}/{file_count}_source_{i}_{timestamp}.png")
             prompt = inputs['raw_text']
             print(prompt)
-            inference_hyper['cfg_text_scale'] = cfg_text_scale-0
+            inference_hyper['cfg_text_scale'] = cfg_text_scale
             inference_hyper['cfg_img_scale'] = cfg_img_scale
             image_list = inferencer.multiview_image_editing(source_images, prompt,  **inference_hyper)
             # output_dict = inferencer(image=image_list, text=prompt, **inference_hyper)
             prompt = prompt.replace(" ", "_")
             for i, image in enumerate(image_list):
-                image.save(f"generation_inspect/ur5s4_b1_edited_{prompt}_{i}.png")
+                image.save(f"{image_dir}/edited_{file_count}_edited_{prompt}_{i}_{timestamp}.png")
             outputs = {}
+            
             for image_key, image in zip(image_keys, image_list):
                 outputs[f"future/{image_key_map[image_key]}"] = np.array(image)
             return outputs
 
-        logger.info("Model loaded.")
         while True:
             try:
                 payload = await websocket.recv()
@@ -246,18 +251,21 @@ async def main(args):
     inferencer = prepare_model(args.weights_path, args.mode)
     image_keys = [x.strip() for x in args.image_key_str.split(",")]
     print(f"inferencing with image keys: {image_keys}")
+    image_dir = f"generated_images/{args.image_save_dir}"
+    os.makedirs(image_dir, exist_ok=True)
+    print(f"generated images will be saved at: {image_dir}")
 
-    print(f"Starting WebSocket server on ws://localhost:{args.port}")
-    # async with websockets.serve(ft.partial(handler, ckpt_dir=args.weights_path), "0.0.0.0", args.port, compression=None, max_size=None) as server:
-    #     await server.wait_closed()  # Run forever
-    async with websockets.serve(ft.partial(handler, inferencer=inferencer, image_keys=image_keys), "0.0.0.0", args.port, compression=None, max_size=None) as server:
+    print(f"\n\nStarting WebSocket server on ws://localhost:{args.port}")
+    async with websockets.serve(ft.partial(handler, inferencer=inferencer, image_keys=image_keys, image_dir=image_dir, n_timesteps=args.n_timesteps), "0.0.0.0", args.port, compression=None, max_size=None) as server:
         await server.wait_closed()  # Run forever
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser() 
-    parser.add_argument("--weights_path", type=str, default="results/pi_ur5e4_b1_allview_seq_seedp1_gpu16_seq16384/checkpoints/0040000/")
+    parser.add_argument("--weights_path", type=str, default="/data/bagel_ckpts/pi_ur5e4_endspan_lange_seedp1_gpu8_seq16384/0040000/")
     parser.add_argument("--mode", type=int, default=1)
-    parser.add_argument("--image_key_str", type=str, default="image_0,image_2")
-    parser.add_argument("--port", type=int, default=8767)
+    parser.add_argument("--image_key_str", type=str, default="image_0,image_2_ur5")
+    parser.add_argument("--image_save_dir", type=str, default="port_8000")
+    parser.add_argument("--n_timesteps", type=int, default=25)
+    parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()
     asyncio.run(main(args))
