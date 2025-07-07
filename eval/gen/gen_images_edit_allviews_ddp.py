@@ -206,10 +206,12 @@ if __name__ == "__main__":
         cfg_img_scale=1.2, # 2.0,
         cfg_interval=[0.0, 1.0],
         timestep_shift=3.0, #3.0,
-        num_timesteps=50,
+        num_timesteps=25,
         cfg_renorm_min=0.0,
         cfg_renorm_type="text_channel",
         image_shapes=(args.resolution, args.resolution),
+        using_2nd_order=False,
+        with_condition=True,
     )
 
 
@@ -222,8 +224,11 @@ if __name__ == "__main__":
                  f"text{inference_hyper['cfg_text_scale']}_"
                  f"img{inference_hyper['cfg_img_scale']}_"
                  f"shift{inference_hyper['timestep_shift']}_"
-                 f"res{inference_hyper['image_shapes'][0]}")
-
+                 f"nsteps{inference_hyper['num_timesteps']}_"
+                 f"res{inference_hyper['image_shapes'][0]}_"
+                 f"heun{inference_hyper['using_2nd_order']}_"
+                 f"condition{inference_hyper['with_condition']}_"
+                 )
 
     gen_suffix = f'{args.task_name}_{args.image_key}_{args.model_mode}_{gen_suffix}'
     output_dir = os.path.join(output_dir,gen_suffix)
@@ -276,7 +281,7 @@ if __name__ == "__main__":
                     target_image_paths.append(target_image_path)
                 else:
                     target_image_paths.append(None)
-        image_list = inferencer.multiview_image_editing(source_images, prompt, device=device)
+        image_list = inferencer.multiview_image_editing(source_images, prompt, device=device, **inference_hyper )
 
         sample_count = 0
         for i, (sample, source_image, target_image) in enumerate(zip(image_list, source_image_paths, target_image_paths)):

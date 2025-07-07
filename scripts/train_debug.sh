@@ -3,7 +3,7 @@
 
 # replace the variables with your own
 # Fine-tuning
-num_nodes=1
+num_nodes=8
 node_rank=0
 master_addr=localhost
 master_port=29500
@@ -26,7 +26,7 @@ PYTHONPATH=. torchrun \
   --master_addr=$master_addr \
   --master_port=$master_port \
   train/pretrain_unified_navit.py \
-  --dataset_config_file ./data/configs/seedp1_0.2_arx_biarm_allview_endspan.yaml \
+  --dataset_config_file ./data/configs/seedp1_0.2_h1g1_allview_endspan.yaml \
   --model_path $model_path \
   --layer_module Qwen2MoTDecoderLayer \
   --max_latent_size 64 \
@@ -43,7 +43,7 @@ PYTHONPATH=. torchrun \
   --max_num_tokens_per_sample $seq_len \
   --batch_size $batch_size \
   --exp_name debug_allview_video7 \
-  --wandb_runid 1 \
+  --wandb_runid 4 \
   --num_shard $GPUS \
   --visual_und False \
   --save_every 10

@@ -27,13 +27,17 @@ import wandb
 import getpass
 from .interleave_t2i_dataset import InterleavedBaseIterableDataset, ParquetStandardIterableDataset
 from ..data_utils import pil_img2rgb
-
+import numpy as np
 Image.MAX_IMAGE_PIXELS = 200000000
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 MaximumDecompressedSize = 1024
 MegaByte = 2 ** 20
 PngImagePlugin.MAX_TEXT_CHUNK = MaximumDecompressedSize * MegaByte
 
+MISTAKE_MAP = {
+    0: False,
+    1: True,
+}  # -1: no mistake annotation
 
 def create_pi_dataset(
     config: _config.TrainConfig, *, split: str = "train", num_epochs: int = 1
@@ -56,7 +60,7 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
         data_dir_list, num_used_data, experiment_name='debug', 
         local_rank=0, world_size=1, num_workers=8, data_status=None, 
         shuffle_lines=False, shuffle_seed=0, n_log_examples=100, image_keys="image_0,image_2",   
-        indepent_image_modeling=False,
+        training_text_loss=False, with_condition=False, force_drop_all_prob=0.15
     ):
         """
         jsonl_path_list: list of jsonl file paths
@@ -75,6 +79,9 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
         self.data_table = wandb.Table(columns=["id", "image", "instruction", "target"])
         self.n_log_examples = n_log_examples
         self.image_key_list = [key.strip() for key in image_keys.split(',')]
+        self.training_text_loss = training_text_loss
+        self.with_condition = with_condition
+        self.force_drop_all_prob = force_drop_all_prob
         self.set_epoch()
 
 
@@ -104,6 +111,11 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
                 data = self._init_data()
                 frames = []
                 frame_indexes = []
+                if self.with_condition:
+                    prefix_text = row["condition_prompt"]
+                    if np.random.uniform() > self.force_drop_all_prob:
+                        data = self._add_text(data, prefix_text, need_loss=False)
+
                 for image_key in self.image_key_list:
                     condition_image = row["image"][image_key]
                     condition_image = Image.fromarray(lib_image.decompress_image_if_needed(condition_image))
@@ -116,10 +128,11 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
                     frame_indexes,
                     need_loss=False, 
                     need_vae=True, 
+                    need_vit=self.training_text_loss,
                 )
 
                 edit_instruction = str(string_encode.decode_str(row["raw_text"]))
-                data = self._add_text(data, edit_instruction, need_loss=False)
+                data = self._add_text(data, edit_instruction, need_loss=self.training_text_loss)
 
                 future_frames = []
                 future_frame_indexes = []

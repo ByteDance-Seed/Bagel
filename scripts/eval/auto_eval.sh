@@ -34,7 +34,7 @@ task_name='arx_endspan'
 exp_names=(
     pi_ur5e4_b1_endspan_lang_seedp1_gpu8_seq16384
 )
-task_name='ur5e4_b1_endspan_lang'
+task_names=('ur5e4_b1_endspan_lang')
 
 
 # exp_names=(
@@ -43,53 +43,71 @@ task_name='ur5e4_b1_endspan_lang'
 # )
 # task_name='diverse_batch_folding'
 
+
+exp_names=(
+    pi_arxs_ur5_allview_seq_seedp1_gpu16_seq16384   
+)
+task_names=('arx_biarm_endspan_lang' 'ur5e4_endspan_lang' 'arx_endspan_lang')
+
+
+
+exp_names=(
+    pi_h1g1_allview_seq_seedp1_gpu16_seq16384   
+)
+task_names=(g1h1_endspan)
+
+
+
+
 wandb_project_name='bagel-edit-eval'
 
 
 # while true; do
 for mode in raw; do
-    for exp_name in "${exp_names[@]}"; do
-        if [[ $exp_name == *"448"* ]]; then
-            resolution=448
-        else
-            resolution=224
-        fi
-        if [[ $exp_name == *"i2"* ]]; then
-            image_key="image_2"
-        else
-            image_key="image_0"
-        fi
-        echo ${exp_name}
-        exp_dir=${root_dir}/${exp_name}
-        ckpt_dir=${exp_dir}/checkpoints/*
-        for d in ${ckpt_dir}; do
-            echo ${d}
-            ckpt=$(basename ${d})
-            # # Edit images
-            step=${ckpt##*_}
-            step=$((10#$step))
-            echo ${step}
-            
-            if (( $step % 10000 != 0 || $step <= 0 ))
-            then
-                continue
+    for task_name in "${task_names[@]}"; do
+        for exp_name in "${exp_names[@]}"; do
+            if [[ $exp_name == *"448"* ]]; then
+                resolution=448
+            else
+                resolution=224
             fi
-            echo $exp_name $mode $resolution $ckpt $image_key
-            PYTHONPATH=. torchrun \
-                --nnodes=1 \
-                --node_rank=0 \
-                --nproc_per_node=$GPUS \
-                --master_addr=127.0.0.1 \
-                --master_port=12345 \
-                ./eval/gen/gen_images_edit_ddp.py \
-                --model-path $model_path \
-                --task_name $task_name \
-                --image_key $image_key \
-                --resolution $resolution \
-                --run_name $exp_name  \
-                --checkpoint_step ${ckpt} \
-                --model_mode $mode  \
-                --wandb_project_name $wandb_project_name
+            if [[ $exp_name == *"i2"* ]]; then
+                image_key="image_2"
+            else
+                image_key="image_0"
+            fi
+            echo ${exp_name}
+            exp_dir=${root_dir}/${exp_name}
+            ckpt_dir=${exp_dir}/checkpoints/*
+            for d in ${ckpt_dir}; do
+                echo ${d}
+                ckpt=$(basename ${d})
+                # # Edit images
+                step=${ckpt##*_}
+                step=$((10#$step))
+                echo ${step}
+                
+                if (( $step % 10000 != 0 || $step <= 0 ))
+                then
+                    continue
+                fi
+                echo $exp_name $mode $resolution $ckpt $image_key
+                PYTHONPATH=. torchrun \
+                    --nnodes=1 \
+                    --node_rank=0 \
+                    --nproc_per_node=$GPUS \
+                    --master_addr=127.0.0.1 \
+                    --master_port=12345 \
+                    ./eval/gen/gen_images_edit_ddp.py \
+                    --model-path $model_path \
+                    --task_name $task_name \
+                    --image_key $image_key \
+                    --resolution $resolution \
+                    --run_name $exp_name  \
+                    --checkpoint_step ${ckpt} \
+                    --model_mode $mode  \
+                    --wandb_project_name $wandb_project_name
+            done
         done
 
     done

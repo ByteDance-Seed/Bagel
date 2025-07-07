@@ -18,6 +18,7 @@ The reasoning process is enclosed within <think> </think> tags, i.e. <think> rea
 GEN_THINK_SYSTEM_PROMPT = '''You should first think about the planning process in the mind and then generate the image. 
 The planning process is enclosed within <think> </think> tags, i.e. <think> planning process here </think> image here'''
 
+CONDITION_SYSTEM_PROMPT = '''Data collector: marshallphoumyvong, Overall Quality: 5/5, Total Steps: 3000, Impending Mistake: False'''
 
 def move_generation_input_to_device(generation_input, device):
     # Utility to move all tensors in generation_input to device
@@ -158,7 +159,9 @@ class InterleaveInferencer:
         num_timesteps=50, 
         timestep_shift=3.0,
         device=None,
+        using_2nd_order=False,
     ):
+        print('in gen_image', num_timesteps)
         # print(cfg_renorm_type)
         past_key_values = gen_context['past_key_values']
         kv_lens = gen_context['kv_lens']
@@ -219,6 +222,7 @@ class InterleaveInferencer:
             cfg_img_key_values_lens=generation_input_cfg_img['cfg_key_values_lens'],
             cfg_img_packed_key_value_indexes=generation_input_cfg_img['cfg_packed_key_value_indexes'],
             n_images=len(image_shape),
+            # using_2nd_order=using_2nd_order,
         )
 
         images = []
@@ -381,6 +385,7 @@ class InterleaveInferencer:
         images_list: List[Image.Image],
         text: str,
         think=False,
+        with_condition=False,
         understanding_output=False,
         device=None,
         max_think_token_n=1000,
@@ -394,15 +399,23 @@ class InterleaveInferencer:
         cfg_renorm_min=0.0,
         cfg_renorm_type="global",
         image_shapes=(1024, 1024),
+        using_2nd_order=False,
     ) -> List[Union[str, Image.Image]]:
-
+        
+        print('in multiview_image_editing', num_timesteps)
         output_list = []
         gen_context = self.init_gen_context()
+        init_context = deepcopy(gen_context)
         cfg_text_context = deepcopy(gen_context)
         cfg_img_context = deepcopy(gen_context)
 
         with torch.autocast(device_type="cuda", enabled=True, dtype=torch.bfloat16):
-                
+            if with_condition:
+                system_prompt = CONDITION_SYSTEM_PROMPT
+                print("using condition", system_prompt)
+                gen_context = self.update_context_text(system_prompt, gen_context, device=device)
+                cfg_img_context = self.update_context_text(system_prompt, cfg_img_context, device=device)
+
             images = []
             image_shapes = []
             for image in images_list:
@@ -410,7 +423,7 @@ class InterleaveInferencer:
                     images.append(input_term)
                     image_shapes.append(input_term.size[::-1])
             gen_context = self.update_context_video(images, gen_context,vae=True, device=device)
-            cfg_text_context = deepcopy(gen_context)
+            cfg_text_context = self.update_context_video(images, init_context,vae=True, device=device)
 
             # then do for text
             cfg_text_context = deepcopy(gen_context)
@@ -440,6 +453,7 @@ class InterleaveInferencer:
                     cfg_renorm_min=cfg_renorm_min,
                     cfg_renorm_type=cfg_renorm_type,
                     device=device,
+                    using_2nd_order=using_2nd_order,
                 )
 
         return images

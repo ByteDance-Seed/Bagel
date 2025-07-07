@@ -5,6 +5,7 @@ set -x
 
 # model_path=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-small-fake
 model_path=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-7B-MoT
+# DATA_DIR = "/home/liliyu/workspace/monopi/monopi/experimental/liliyu/export_wm/"
 
 GPUS=8
 image_key=all_views
@@ -21,15 +22,47 @@ resolution=224
 # exp_name=pi_ur5e4_b1_allview_seq_seedp1_gpu16_seq16384
 # task_name=ur5e4_b1_endspan_lang
 # image_list_str="image_0,image_2"
-ckpt=0020000
+ckpt=0019000
 
 exp_name=pi_arx_biarm_allview_seq_seedp1_gpu16_seq16384
-task_name=arx_biarm_endspan_lang
+task_name=diverse_batch_folding_step100
 image_list_str="image_0,image_2,image_3"
-ckpt=0015000
+ckpt=0050000
 
 mode=raw
 wandb_project_name=bagel-edit-eval
+
+
+
+exp_name=pi_arxs_ur5_allview_seq_seedp1_gpu16_seq16384   
+# task_name=arx_biarm_endspan_lang
+# image_list_str="image_0,image_2,image_3"
+# task_name=ur5e4_endspan_lang
+# image_list_str="image_0,image_2"
+# task_name=arx_endspan_lang
+# image_list_str="image_0,image_2"
+task_name=arx_biarm_bussing
+image_list_str="image_0,image_2,image_3"
+ckpt=0029000
+
+exp_name=pi_h1g1_allview_seq_seedp1_gpu16_seq16384   
+task_name=g1h1_endspan
+image_list_str="image_0,image_2,image_3"
+ckpt=0040000
+
+
+exp_name=pi_diverse_batch_100steps_seedp1_gpu16_seq16384
+task_name=diverse_batch_folding_step100
+image_list_str="image_0,image_2,image_3"
+ckpt=0047500
+
+exp_name=pi_diverse_batch_conditioning_100steps_seedp1_gpu16_seq16384
+task_name=diverse_batch_folding_step100
+image_list_str="image_0,image_2,image_3"
+ckpt=0050000
+
+
+
 
 
 PYTHONPATH=. torchrun \

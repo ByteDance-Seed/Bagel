@@ -403,7 +403,10 @@ class PackedDataset(torch.utils.data.IterableDataset):
                 # update sequence status
                 attn_modes.append("full")
                 sequence_status['packed_position_ids'].extend([curr_rope_id] * curr_split_len)
-                curr_rope_id += 1
+                if 'frame_delta' in item.keys():
+                    curr_rope_id += item['frame_delta']
+                else:
+                    curr_rope_id += 1
 
             elif item['type'] == 'vae_image':
                 image_tensor = image_tensor_list.pop(0)

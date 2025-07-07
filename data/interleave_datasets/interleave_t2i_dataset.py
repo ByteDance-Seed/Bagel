@@ -87,7 +87,7 @@ class InterleavedBaseIterableDataset(DistributedIterableDataset):
 
         return data
 
-    def _add_video(self, data, frames, frame_indexes, need_loss, need_vae, enable_cfg=True):
+    def _add_video(self, data, frames, frame_indexes, need_loss, need_vae, need_vit=False, enable_cfg=True):
         assert int(need_loss) + int(need_vae) == 1
 
         if need_loss:
@@ -109,7 +109,8 @@ class InterleavedBaseIterableDataset(DistributedIterableDataset):
                 data['image_tensor_list'].append(image_tensor)
                 data['num_tokens'] += width * height // self.transform.stride ** 2
 
-        elif need_vae:
+
+        if need_vae:
             for idx, (image, frame_idx) in enumerate(zip(frames, frame_indexes)):
                 current_sequence_plan = {
                     'type': 'vae_image', 
@@ -127,6 +128,24 @@ class InterleavedBaseIterableDataset(DistributedIterableDataset):
                 height, width = image_tensor.shape[1:]
                 data['image_tensor_list'].append(image_tensor)
                 data['num_tokens'] += width * height // self.transform.stride ** 2
+
+
+        if need_vit:
+            for idx, (image, frame_idx) in enumerate(zip(frames, frame_indexes)):
+                current_sequence_plan = {
+                    'type': 'vit_image', 
+                    'enable_cfg': int(enable_cfg), 
+                    'loss': 0, 
+                    'special_token_loss': 0,
+                    'special_token_label': None,
+                }
+                if idx < len(frame_indexes) - 1:
+                    current_sequence_plan['frame_delta'] = frame_indexes[idx + 1] - frame_idx
+                data['sequence_plan'].append(current_sequence_plan)
+                vit_image_tensor = self.vit_transform(image)
+                height, width = vit_image_tensor.shape[1:]
+                data['num_tokens'] += width * height // self.vit_transform.stride ** 2
+                data['image_tensor_list'].append(vit_image_tensor)
 
         return data
 
