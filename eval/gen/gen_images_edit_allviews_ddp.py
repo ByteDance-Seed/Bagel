@@ -161,6 +161,7 @@ if __name__ == "__main__":
     parser.add_argument('--checkpoint_step', type=str, default='-1')
     parser.add_argument('--run_name', type=str, default='SEED_part23_run0')
     parser.add_argument('--model_mode', type=str, default='ema')
+    parser.add_argument("--with_condition", type=bool, default=False)
     parser.add_argument('--wandb_project_name', type=str, default='bagel-edit-eval')
     args = parser.parse_args()
     ################################    
@@ -211,7 +212,7 @@ if __name__ == "__main__":
         cfg_renorm_type="text_channel",
         image_shapes=(args.resolution, args.resolution),
         using_2nd_order=False,
-        with_condition=True,
+        with_condition=args.with_condition,
     )
 
 

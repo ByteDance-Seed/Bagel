@@ -18,6 +18,7 @@ DATASET_REGISTRY = {
     'pi_edit_allviews1': PiEditAllViewsIterableDataset,
     'pi_edit_allviews2': PiEditAllViewsIterableDataset,
     'pi_edit_allviews3': PiEditAllViewsIterableDataset,
+    'pi_edit_allviews4': PiEditAllViewsIterableDataset,
 }
 
 
@@ -84,6 +85,11 @@ DATASET_INFO = {
 		},
     },
     "pi_edit_allviews3": {
+        'ur5_endspan_448': {
+            'data_dir': '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
+		},
+    },
+    "pi_edit_allviews4": {
         'ur5_endspan_448': {
             'data_dir': '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
 		},
