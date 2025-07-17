@@ -95,8 +95,14 @@ class EditJSONLIterableDataset(InterleavedBaseIterableDataset):
                     continue
                 
                 data = self._init_data()
-                condition_image = Image.open(data_item["source_image"])
-                edited_image = Image.open(data_item["target_image"])
+                # TODO: update the iamge path to be relative path
+                source_image_path = data_item["source_image"].replace("/home/liliyu/workspace/hf_data", "/mnt/weka/checkpoints/hf_data") 
+                target_image_path = data_item["target_image"].replace("/home/liliyu/workspace/hf_data", "/mnt/weka/checkpoints/hf_data")
+                if not os.path.exists(source_image_path) or not os.path.exists(target_image_path):
+                    print(f"source_image_path: {source_image_path} or target_image_path: {target_image_path} does not exist")
+                    continue
+                condition_image = Image.open(source_image_path)
+                edited_image = Image.open(target_image_path)
                 edit_instruction = data_item["instruction"]
                 
                 data = self._add_image(
