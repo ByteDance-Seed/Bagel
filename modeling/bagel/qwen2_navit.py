@@ -22,7 +22,7 @@ from torch.nn.functional import scaled_dot_product_attention
 from transformers.utils import ModelOutput
 
 from flash_attn import flash_attn_varlen_func
-from modeling.qwen2.modeling_qwen2 import (
+from ..qwen2.modeling_qwen2 import (
     Qwen2Attention, 
     Qwen2MLP, 
     Qwen2PreTrainedModel, 
@@ -30,8 +30,7 @@ from modeling.qwen2.modeling_qwen2 import (
     Qwen2RotaryEmbedding,
     apply_rotary_pos_emb,
 )
-
-from modeling.qwen2.configuration_qwen2 import Qwen2Config as _Qwen2Config
+from ..qwen2.configuration_qwen2 import Qwen2Config as _Qwen2Config
 
 
 torch._dynamo.config.cache_size_limit = 512
@@ -1012,6 +1011,13 @@ class Qwen2Model(Qwen2PreTrainedModel):
         packed_vae_token_indexes=None,
         packed_text_indexes=None,
     ) -> BaseNavitOutputWithPast:
+        
+        def to_module_device(tensor, module):
+            if tensor is None:
+                return None
+            if hasattr(module, 'weight') and module.weight is not None:
+                return tensor.to(module.weight.device, non_blocking=True)
+            return tensor
 
         # create position embeddings to be shared across the decoder layers
         cos, sin = self.rotary_emb(packed_query_sequence, packed_query_position_ids.unsqueeze(0))
@@ -1049,6 +1055,11 @@ class Qwen2Model(Qwen2PreTrainedModel):
                 packed_query_sequence = self.norm(packed_query_sequence)
             elif mode == "gen":
                 packed_query_sequence_ = torch.zeros_like(packed_query_sequence)
+                packed_query_sequence_ = to_module_device(packed_query_sequence_,self.norm)
+                packed_text_indexes = to_module_device(packed_text_indexes,self.norm)
+                packed_query_sequence = to_module_device(packed_query_sequence,self.norm)
+                packed_vae_token_indexes = to_module_device(packed_vae_token_indexes,self.norm)
+
                 packed_query_sequence_[packed_text_indexes] = self.norm(packed_query_sequence[packed_text_indexes])
                 packed_query_sequence_[packed_vae_token_indexes] = self.norm_moe_gen(packed_query_sequence[packed_vae_token_indexes])
                 packed_query_sequence = packed_query_sequence_
