@@ -111,10 +111,6 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
                 data = self._init_data()
                 frames = []
                 frame_indexes = []
-                if self.with_condition:
-                    prefix_text = row["condition_prompt"]
-                    if np.random.uniform() > self.force_drop_all_prob:
-                        data = self._add_text(data, prefix_text, need_loss=False)
 
                 for image_key in self.image_key_list:
                     condition_image = row["image"][image_key]
@@ -131,7 +127,20 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
                     need_vit=self.training_text_loss,
                 )
 
+                all_text = ""
+                if self.with_condition:
+                    prefix_text = row["condition_prompt"]
+                    if np.random.uniform() > self.force_drop_all_prob:
+                        all_text += prefix_text
+                        data = self._add_text(data, prefix_text, need_loss=False)
+
+                if self.training_text_loss:
+                    prompt = str(string_encode.decode_str(row["prompt"]))
+                    prompt = f"Task: {prompt}, Subtask: "
+                    all_text += prompt
+                    data = self._add_text(data, prompt, need_loss=False)
                 edit_instruction = str(string_encode.decode_str(row["raw_text"]))
+                all_text += edit_instruction
                 data = self._add_text(data, edit_instruction, need_loss=self.training_text_loss)
 
                 future_frames = []
@@ -155,7 +164,7 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
                 # Add logger for debugging
                 if row_idx <= self.n_log_examples:
                     # Create side-by-side full_example with text
-                    self.save_example_multi_image(frames, future_frames, edit_instruction, row_idx, self.image_key_list)
+                    self.save_example_multi_image(frames, future_frames, all_text, row_idx, self.image_key_list)
                 data['data_indexes'] = {
                     "data_indexes": row_idx,
                     "worker_id": worker_id,

@@ -40,58 +40,58 @@ DATASET_INFO = {
     },
     'simple_edit':{
         'simple_edit': {
-            'data_dir': '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
-            "jsonl_path": '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/annotations_GPT4V/filtered_combined_splits.jsonl', # information of the parquet files
+            'data_dir': '/mnt/weka/checkpoints/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
+            "jsonl_path": '/mnt/weka/checkpoints/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/annotations_GPT4V/filtered_combined_splits.jsonl', # information of the parquet files
 		},
         'seed_part1': {
-            'data_dir': '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
-            "jsonl_path": '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/annotations_GPT4V/filtered_combined_splits.jsonl', # information of the parquet files
+            'data_dir': '/mnt/weka/checkpoints/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
+            "jsonl_path": '/mnt/weka/checkpoints/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/annotations_GPT4V/filtered_combined_splits.jsonl', # information of the parquet files
 		},
     },
     "pi_edit": {
         'pi_edit': {
-            'data_dir': '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
+            'data_dir': '/mnt/weka/checkpoints/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
 		},
         'arx_endspan_448': {
-            'data_dir': '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
+            'data_dir': '/mnt/weka/checkpoints/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
 		},
         'ur5_endspan_448': {
-            'data_dir': '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
+            'data_dir': '/mnt/weka/checkpoints/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
 		},
     },
     "pi_edit2": {
         'ur5_endspan_448': {
-            'data_dir': '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
+            'data_dir': '/mnt/weka/checkpoints/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
 		},
     },
     "pi_edit3": {
         'ur5_endspan_448': {
-            'data_dir': '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
+            'data_dir': '/mnt/weka/checkpoints/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
 		},
     },
     "pi_edit_allviews": {
         'ur5_endspan_448': {
-            'data_dir': '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
+            'data_dir': '/mnt/weka/checkpoints/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
 		},
     },
     "pi_edit_allviews1": {
         'ur5_endspan_448': {
-            'data_dir': '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
+            'data_dir': '/mnt/weka/checkpoints/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
 		},
     },
     "pi_edit_allviews2": {
         'ur5_endspan_448': {
-            'data_dir': '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
+            'data_dir': '/mnt/weka/checkpoints/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
 		},
     },
     "pi_edit_allviews3": {
         'ur5_endspan_448': {
-            'data_dir': '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
+            'data_dir': '/mnt/weka/checkpoints/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
 		},
     },
     "pi_edit_allviews4": {
         'ur5_endspan_448': {
-            'data_dir': '/home/liliyu/workspace/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
+            'data_dir': '/mnt/weka/checkpoints/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
 		},
     },
     'vlm_sft': {
