@@ -17,20 +17,22 @@ class DistributedIterableDataset(torch.utils.data.IterableDataset):
     def get_data_paths(self, *args, **kwargs):
         raise NotImplementedError
 
-    def set_epoch(self, seed=42):
+    def set_epoch(self, seed=42, pi_dataset=False):
         if self.data_paths is None:
             return
-
-        # if isinstance(self.data_paths[0], tuple):
-        #     data_paths = sorted(self.data_paths, key=lambda x: (x[0], x[1]))
-        # elif isinstance(self.data_paths[0], str):
-        #     data_paths = sorted(self.data_paths)
-        # else:
-        #     raise ValueError(f"Unknown data_paths type: {type(self.data_paths[0])}")
-        
-        data_paths = self.data_paths
-        self.rng.seed(seed)
-        # self.rng.shuffle(data_paths)
+        if pi_dataset:
+            data_paths = self.data_paths
+        else:
+            if isinstance(self.data_paths[0], tuple):
+                data_paths = sorted(self.data_paths, key=lambda x: (x[0], x[1]))
+            elif isinstance(self.data_paths[0], str):
+                data_paths = sorted(self.data_paths)
+            else:
+                raise ValueError(f"Unknown data_paths type: {type(self.data_paths[0])}")
+            
+            data_paths = self.data_paths
+            self.rng.seed(seed)
+            self.rng.shuffle(data_paths)
 
         num_files_per_rank = len(data_paths) // self.world_size
         local_start = self.local_rank * num_files_per_rank

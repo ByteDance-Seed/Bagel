@@ -74,7 +74,7 @@ class PiEditIterableDataset(InterleavedBaseIterableDataset):
         self.data_table = wandb.Table(columns=["id", "image", "instruction", "target"])
         self.n_log_examples = n_log_examples
         self.image_key = image_key
-        self.set_epoch()
+        self.set_epoch(pi_dataset=True)
 
 
     def get_data_paths(self):
@@ -97,8 +97,7 @@ class PiEditIterableDataset(InterleavedBaseIterableDataset):
         )
 
         while True:
-            data_paths_per_worker_ = data_paths_per_worker[row_start_id:]
-            for row_idx, row in enumerate(data_paths_per_worker_, start=row_start_id):
+            for row_idx, row in enumerate(data_paths_per_worker, start=row_start_id):
 
                 data = self._init_data()
                 condition_image = row["image"][self.image_key]

@@ -21,6 +21,7 @@ pi_edit_allviews:
   - arx_endspan_224  # Set pi data name for tracking
   pi_config_name: mar18_arx_biarm_single_base_future_img_last_image_splited_span_reject_last50  # Set pi data here 
   image_keys: "image_0,image_2,image_3"
+  training_text_loss: True
   image_transform_args:
     image_stride: 16
     max_image_size: 224
@@ -34,8 +35,7 @@ pi_edit_allviews:
   shuffle_seed: 0
   num_used_data:
   - 16656
-  weight: 1
-
+  weight: 3
 
 
 pi_edit_allviews1:
@@ -43,6 +43,7 @@ pi_edit_allviews1:
   - arx_single_allviews  # Set pi data name for tracking
   pi_config_name: mar18_arx_single_future_img_pred_w0_1_last_image_splited_span_reject_last50  # Set pi data here 
   image_keys: "image_0,image_2"
+  training_text_loss: True
   image_transform_args:
     image_stride: 16
     max_image_size: 224
@@ -64,6 +65,7 @@ pi_edit_allviews2:
   - ur5_allviews # Set pi data name for tracking
   pi_config_name: mar18_ur5_future_img_pred_w0_1_last_image_splited_span_reject_last50  # Set pi data here 
   image_keys: "image_0,image_2"
+  training_text_loss: True
   image_transform_args:
     image_stride: 16
     max_image_size: 224
@@ -80,11 +82,36 @@ pi_edit_allviews2:
   weight: 1
 
 
+
+
 pi_edit_allviews3:
   dataset_names:
   - ur5_allviews # Set pi data name for tracking
   pi_config_name: mar18_ur5_b1_future_img_pred_w0_1_last_image_splited_span_reject_last50  # Set pi data here 
   image_keys: "image_0,image_2"
+  training_text_loss: True
+  image_transform_args:
+    image_stride: 16
+    max_image_size: 224
+    min_image_size: 224
+  vit_image_transform_args:
+    image_stride: 14
+    max_image_size: 224
+    min_image_size: 224
+  is_mandatory: true
+  shuffle_lines: True
+  shuffle_seed: 0
+  num_used_data:
+  - 16656
+  weight: 1
+
+
+pi_edit_allviews4:
+  dataset_names:
+  - arx_endspan_224  # Set pi data name for tracking
+  pi_config_name: mar18_h1_g1_3cam_baseline_future_img_sg_w0_1_endspan_splited_span_reject_last50  # Set pi data here 
+  image_keys: "image_0,image_2,image_3"
+  training_text_loss: True
   image_transform_args:
     image_stride: 16
     max_image_size: 224

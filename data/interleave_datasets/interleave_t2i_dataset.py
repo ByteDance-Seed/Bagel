@@ -160,7 +160,7 @@ class InterleavedBaseIterableDataset(DistributedIterableDataset):
         with open(os.path.join(img_dir, f"example_{row_idx}_instruction.txt"), "w") as f:
             f.write(edit_instruction)
 
-        self.data_table.add_data(row_idx, condition_image, edit_instruction, edited_image)
+        # self.data_table.add_data(row_idx, condition_image, edit_instruction, edited_image)
 
         border_width = 2
         text_height = 50  # Space for text at bottom

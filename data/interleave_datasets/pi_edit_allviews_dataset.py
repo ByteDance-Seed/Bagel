@@ -25,9 +25,12 @@ from monopi.lib.py.image import image as lib_image
 import monopi.lib.py.ml.jax.string_encode as string_encode
 import wandb
 import getpass
+import dataclasses
 from .interleave_t2i_dataset import InterleavedBaseIterableDataset, ParquetStandardIterableDataset
 from ..data_utils import pil_img2rgb
 import numpy as np
+
+
 Image.MAX_IMAGE_PIXELS = 200000000
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 MaximumDecompressedSize = 1024
@@ -39,8 +42,18 @@ MISTAKE_MAP = {
     1: True,
 }  # -1: no mistake annotation
 
+@dataclasses.dataclass(frozen=True)
+class ShardInfo:
+    """Information about a data source shard."""
+
+    # Index of the current shard.
+    shard_id: int = 0
+    # Total number of shards.
+    num_shards: int = 1
+
+
 def create_pi_dataset(
-    config: _config.TrainConfig, *, split: str = "train", num_epochs: int = 1
+    config: _config.TrainConfig, *, split: str = "train", num_epochs: int = 1, local_rank=0, world_size=1
 ):
     """Creates a PyTorch dataset from a config name."""
     config.data.return_compressed_images = True
@@ -50,8 +63,9 @@ def create_pi_dataset(
     # )
 
     task_mixture = dataloader.create_task_mixture(config.data)
+
     mixture = task_mixture.mixtures[split]
-    dt = mixture.get_dataset(num_epochs=num_epochs, shuffle=True)
+    dt = mixture.get_dataset(num_epochs=num_epochs, shuffle=True, shard_info=ShardInfo(local_rank, world_size))
     return dt
 
 class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
@@ -73,7 +87,7 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
         self.tokenizer = tokenizer
         self.vit_transform = vit_transform
         self.data_status = data_status
-        self.data_paths = self.get_data_paths()
+        self.data_paths = self.get_data_paths(local_rank, world_size)
         self.experiment_name = experiment_name
 
         self.data_table = wandb.Table(columns=["id", "image", "instruction", "target"])
@@ -82,12 +96,12 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
         self.training_text_loss = training_text_loss
         self.with_condition = with_condition
         self.force_drop_all_prob = force_drop_all_prob
-        self.set_epoch()
+        self.set_epoch(pi_dataset=True)
 
 
-    def get_data_paths(self):
+    def get_data_paths(self, local_rank, world_size):
         config = register_cfg.get_config(self.pi_config)
-        data_paths = create_pi_dataset(config, split="train")
+        data_paths = create_pi_dataset(config, split="train", local_rank=local_rank, world_size=world_size)
         return data_paths
 
 
@@ -105,9 +119,8 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
         )
 
         while True:
-            data_paths_per_worker_ = data_paths_per_worker[row_start_id:]
             frame_idx = 0
-            for row_idx, row in enumerate(data_paths_per_worker_, start=row_start_id):
+            for row_idx, row in enumerate(data_paths_per_worker, start=row_start_id):
                 data = self._init_data()
                 frames = []
                 frame_indexes = []
@@ -135,6 +148,7 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
                         data = self._add_text(data, prefix_text, need_loss=False)
 
                 if self.training_text_loss:
+                    # prompt = str(string_encode.decode_str(row["robot_task_string"]))
                     prompt = str(string_encode.decode_str(row["prompt"]))
                     prompt = f"Task: {prompt}, Subtask: "
                     all_text += prompt
