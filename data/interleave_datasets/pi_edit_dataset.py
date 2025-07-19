@@ -63,6 +63,7 @@ class PiEditIterableDataset(InterleavedBaseIterableDataset):
         num_used_data: list of number of sampled data points for each jsonl
         """
         super().__init__(dataset_name, local_rank, world_size, num_workers)
+        self.dataset_name=dataset_name   
         self.transform = transform
         self.pi_config = pi_config_name
         self.tokenizer = tokenizer
@@ -74,13 +75,24 @@ class PiEditIterableDataset(InterleavedBaseIterableDataset):
         self.data_table = wandb.Table(columns=["id", "image", "instruction", "target"])
         self.n_log_examples = n_log_examples
         self.image_key = image_key
-        self.set_epoch(pi_dataset=True)
+        self.set_epoch()
 
 
     def get_data_paths(self):
         config = register_cfg.get_config(self.pi_config)
         data_paths = create_pi_dataset(config, split="train")
         return data_paths
+
+    def set_epoch(self, seed=42):
+        if self.data_paths is None:
+            return        
+        data_paths = self.data_paths
+        num_files_per_rank = len(data_paths) // self.world_size
+        print(f"{self.dataset_name}: num_files_per_rank: {num_files_per_rank}")
+        local_start = self.local_rank * num_files_per_rank
+        local_end = (self.local_rank + 1) * num_files_per_rank
+        self.num_files_per_rank = num_files_per_rank
+        self.data_paths_per_rank = data_paths[local_start:local_end]
 
 
     def __iter__(self):

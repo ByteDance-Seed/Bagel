@@ -96,13 +96,26 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
         self.training_text_loss = training_text_loss
         self.with_condition = with_condition
         self.force_drop_all_prob = force_drop_all_prob
-        self.set_epoch(pi_dataset=True)
+        self.set_epoch()
 
 
     def get_data_paths(self, local_rank, world_size):
         config = register_cfg.get_config(self.pi_config)
         data_paths = create_pi_dataset(config, split="train", local_rank=local_rank, world_size=world_size)
         return data_paths
+
+
+    def set_epoch(self, seed=42):
+        if self.data_paths is None:
+            return        
+        data_paths = self.data_paths
+        num_files_per_rank = len(data_paths) // self.world_size
+        print(f"{self.dataset_name}: num_files_per_rank: {num_files_per_rank}")
+        local_start = self.local_rank * num_files_per_rank
+        local_end = (self.local_rank + 1) * num_files_per_rank
+        self.num_files_per_rank = num_files_per_rank
+        self.data_paths_per_rank = data_paths[local_start:local_end]
+
 
 
     def __iter__(self):

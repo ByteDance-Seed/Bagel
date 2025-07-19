@@ -709,10 +709,10 @@ def main():
                 data_status[item['dataset_name']] = {}
             data_status[item['dataset_name']][item['worker_id']] = item['data_indexes']
 
-        if curr_step == 10 and dist.get_rank() == 0:
-            for dataset in train_dataset.grouped_datasets:
-                if dataset.data_table is not None:
-                    wandb.log({"data_table": dataset.data_table})
+        # if curr_step == 10 and dist.get_rank() == 0:
+        #     for dataset in train_dataset.grouped_datasets:
+        #         if dataset.data_table is not None:
+        #             wandb.log({"data_table": dataset.data_table})
 
         if curr_step % training_args.save_every == 0:
             if dist.get_rank() == 0:
