@@ -47,52 +47,56 @@ class T2IIWebDataset(InterleavedBaseIterableDataset):
     def __iter__(self):
         data_paths_per_worker, worker_id = self.get_data_paths_per_worker()
         if self.data_status is not None:
-            parquet_start_id = self.data_status[worker_id][0]
+            tar_start_id = self.data_status[worker_id][0]
             row_start_id = self.data_status[worker_id][1] + 1
         else:
-            parquet_start_id = 0
+            tar_start_id = 0
             row_start_id = 0
-        transform_stride = self.transform.stride
 
         print(
             f"rank-{self.local_rank} worker-{worker_id} dataset-{self.dataset_name}: "
-            f"resuming data at parquet#{parquet_start_id}, row#{row_start_id}"
+            f"resuming data at parquet#{tar_start_id}, row#{row_start_id}"
         )
 
         while True:
-            data_paths_per_worker_ = data_paths_per_worker[parquet_start_id:]
-            for parquet_idx, parquet_file_path in enumerate(data_paths_per_worker_, start=parquet_start_id):
-                    wds_obj = wds.WebDataset(parquet_file_path, nodesplitter=lambda x: x).shuffle(10000)
+            data_paths_per_worker_ = data_paths_per_worker[tar_start_id:] #skip the tar file that's alrady trained
+            for tarfile_idx, tar_file_path in enumerate(data_paths_per_worker_, start=tar_start_id):
+                    wds_obj = wds.WebDataset(tar_file_path, nodesplitter=lambda x: x).shuffle(10000)
         
                     for row_idx, row in enumerate(wds_obj):
+                        # skip the row in this tar file that's already trained
                         if row_idx < row_start_id:
                             continue
-
-                        data = self._init_data()
-                        
-                        image_byte = row['jpg']
-                        image = pil_img2rgb(Image.open(io.BytesIO(image_byte)))
-                        caption = row['txt'].decode('utf-8') if isinstance(row['txt'], bytes) else row['txt']
-                        data = self._add_text(data, f"Generate image from caption: {caption}", need_loss=False)
-                        data = self._add_image(
-                            data,
-                            image,
-                            need_loss=True,
-                            need_vae=False,
-                            need_vit=False,
-                        )
-                        if row_idx <= self.n_log_examples:
-                            # Create side-by-side full_example with text
-                            self.save_example_image(image, image, caption, row_idx)
-                        data['data_indexes'] = {
-                            "data_indexes": [parquet_idx, row_idx],
-                            "worker_id": worker_id,
-                            "dataset_name": self.dataset_name,
-                        }
-                        yield data
+                        try:
+                            data = self._init_data()
+                            
+                            image_byte = row['jpg']
+                            image = pil_img2rgb(Image.open(io.BytesIO(image_byte)))
+                            caption = row['txt'].decode('utf-8') if isinstance(row['txt'], bytes) else row['txt']
+                            data = self._add_text(data, f"Generate image from caption: {caption}", need_loss=False)
+                            data = self._add_image(
+                                data,
+                                image,
+                                need_loss=True,
+                                need_vae=False,
+                                need_vit=False,
+                            )
+                            if row_idx <= self.n_log_examples:
+                                # Create side-by-side full_example with text
+                                self.save_example_image(image, image, caption, row_idx)
+                            data['data_indexes'] = {
+                                "data_indexes": [tarfile_idx, row_idx],
+                                "worker_id": worker_id,
+                                "dataset_name": self.dataset_name,
+                            }
+                            yield data
+                        except Exception as e:
+                            print(
+                                f"Error when trying to decode line {row_idx} in {tar_file_path} {e}"
+                            )
 
                     row_start_id = 0
-            parquet_start_id = 0
+            tar_start_id = 0
             print(f"{self.dataset_name} repeat in rank-{self.local_rank} worker-{worker_id}")
 
 class T2IIterableDataset(DistributedIterableDataset):

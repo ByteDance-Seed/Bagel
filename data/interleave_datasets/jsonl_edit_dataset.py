@@ -20,8 +20,8 @@ PngImagePlugin.MAX_TEXT_CHUNK = MaximumDecompressedSize * MegaByte
 
 class EditJSONLIterableDataset(InterleavedBaseIterableDataset):
     def __init__(
-        self, dataset_name, transform, tokenizer, vit_transform, 
-        jsonl_path_list, data_dir_list, num_used_data, experiment_name='debug',
+        self, dataset_name, transform, tokenizer, vit_transform, json_dir_list,
+        jsonl_path_list=[], data_dir_list=[], num_used_data=[], experiment_name='debug',
         local_rank=0, world_size=1, num_workers=8, data_status=None, 
         shuffle_lines=True, shuffle_seed=0, n_log_examples=100,
     ):
@@ -40,9 +40,8 @@ class EditJSONLIterableDataset(InterleavedBaseIterableDataset):
 
         self.n_log_examples = n_log_examples
         self.data_paths = self.get_data_paths(
-            jsonl_path_list, 
-            data_dir_list, 
-            num_used_data, 
+            json_dir_list, # jsonl style of full examples
+            data_dir_list, # where images are saved
             shuffle_lines, 
             shuffle_seed,
         )
@@ -51,25 +50,29 @@ class EditJSONLIterableDataset(InterleavedBaseIterableDataset):
 
     def get_data_paths(
         self, 
-        jsonl_path_list, 
+        json_dir_list, 
         data_dir_list, 
-        num_used_data, 
         shuffle_lines, 
         shuffle_seed,
     ):
         data_paths = []
-        for jsonl_path, image_dir, num_data_point in zip(
-            jsonl_path_list, data_dir_list, num_used_data
+        for jsonl_dir, image_dir in zip(
+            json_dir_list, data_dir_list
         ):
-            with open(jsonl_path, 'r') as f:
-                raw_data = f.readlines()
-            if shuffle_lines:
-                self.rng.seed(shuffle_seed)
-                self.rng.shuffle(raw_data)
-            raw_data = raw_data[:num_data_point]
-            data_paths.extend([(json_data, image_dir) for json_data in raw_data])
+            all_data = []
+            for file in os.listdir(jsonl_dir):
+                # read eveyrthing in so we can do global shuffle. 
+                # TODO, we may preshuffe and shard.
+                jsonl_path = os.path.join(jsonl_dir, file)
+                with open(jsonl_path, 'r') as f:
+                    raw_data = f.readlines()
+                if shuffle_lines:
+                    self.rng.seed(shuffle_seed)
+                    self.rng.shuffle(raw_data)
+                all_data += raw_data
+            data_paths.extend([(json_data, image_dir) for json_data in all_data])
+        print(f"image_dir: {image_dir}")
         return data_paths
-
 
 
     def __iter__(self):
@@ -78,7 +81,6 @@ class EditJSONLIterableDataset(InterleavedBaseIterableDataset):
             row_start_id = self.data_status[worker_id] + 1
         else:
             row_start_id = 0
-        transform_stride = self.transform.stride
 
         print(
             f"rank-{self.local_rank} worker-{worker_id} dataset-{self.dataset_name}: "
@@ -93,46 +95,50 @@ class EditJSONLIterableDataset(InterleavedBaseIterableDataset):
                 except:
                     traceback.print_exc()
                     continue
-                
-                data = self._init_data()
-                # TODO: update the iamge path to be relative path
-                source_image_path = data_item["source_image"].replace("/home/liliyu/workspace/hf_data", "/mnt/weka/checkpoints/hf_data") 
-                target_image_path = data_item["target_image"].replace("/home/liliyu/workspace/hf_data", "/mnt/weka/checkpoints/hf_data")
-                if not os.path.exists(source_image_path) or not os.path.exists(target_image_path):
-                    print(f"source_image_path: {source_image_path} or target_image_path: {target_image_path} does not exist")
-                    continue
-                condition_image = Image.open(source_image_path)
-                edited_image = Image.open(target_image_path)
-                edit_instruction = data_item["instruction"]
-                
-                data = self._add_image(
-                    data, 
-                    pil_img2rgb(condition_image),
-                    need_loss=False, 
-                    need_vae=True, 
-                    need_vit=True, 
-                )
-                data = self._add_text(data, edit_instruction, need_loss=False)
-                data = self._add_image(
-                    data, 
-                    pil_img2rgb(edited_image),
-                    need_loss=True, 
-                    need_vae=False, 
-                    need_vit=False,
-                )
+                try:
+                    data = self._init_data()
+                    # TODO: update the iamge path to be relative path
+                    source_image_path = os.path.join(image_dir, data_item["source_image"])
+                    target_image_path = os.path.join(image_dir, data_item["target_image"])
+                    if not os.path.exists(source_image_path) or not os.path.exists(target_image_path):
+                        print(f"source_image_path: {source_image_path} or target_image_path: {target_image_path} does not exist")
+                        continue
+                    condition_image = Image.open(source_image_path)
+                    edited_image = Image.open(target_image_path)
+                    edit_instruction = data_item["instruction"]
+                    
+                    data = self._add_image(
+                        data, 
+                        pil_img2rgb(condition_image),
+                        need_loss=False, 
+                        need_vae=True, 
+                        need_vit=True, 
+                    )
+                    data = self._add_text(data, edit_instruction, need_loss=False)
+                    data = self._add_image(
+                        data, 
+                        pil_img2rgb(edited_image),
+                        need_loss=True, 
+                        need_vae=False, 
+                        need_vit=False,
+                    )
 
-                if len(data) == 0:
-                    continue
-                # Add logger for debugging
-                if row_idx <= self.n_log_examples:
-                    # Create side-by-side full_example with text
-                    self.save_example_image(condition_image, edited_image, edit_instruction, row_idx)
-                data['data_indexes'] = {
-                    "data_indexes": row_idx,
-                    "worker_id": worker_id,
-                    "dataset_name": self.dataset_name,
-                }
-                yield data
+                    if len(data) == 0:
+                        continue
+                    # Add logger for debugging
+                    if row_idx <= self.n_log_examples:
+                        # Create side-by-side full_example with text
+                        self.save_example_image(condition_image, edited_image, edit_instruction, row_idx)
+                    data['data_indexes'] = {
+                        "data_indexes": row_idx,
+                        "worker_id": worker_id,
+                        "dataset_name": self.dataset_name,
+                    }
+                    yield data
+                except Exception as e:
+                    print(
+                        f"Error when trying to decode line {row_idx} {e}"
+                    )
 
             row_start_id = 0
             print(f"{self.dataset_name} repeat in rank-{self.local_rank} worker-{worker_id}")

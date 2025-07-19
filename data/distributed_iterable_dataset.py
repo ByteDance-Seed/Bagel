@@ -25,12 +25,17 @@ class DistributedIterableDataset(torch.utils.data.IterableDataset):
             data_paths = sorted(self.data_paths, key=lambda x: (x[0], x[1]))
         elif isinstance(self.data_paths[0], str):
             data_paths = sorted(self.data_paths)
+        elif isinstance(self.data_paths[0], dict):
+            # This is pi data, where each row is data dict, e.g {'image': image, 'raw_text': text}
+            # Pi data is already shuffled
+            pass
         else:
             raise ValueError(f"Unknown data_paths type: {type(self.data_paths[0])}")
         
         data_paths = self.data_paths
         self.rng.seed(seed)
-        self.rng.shuffle(data_paths)
+        if not isinstance(self.data_paths[0], dict):
+            self.rng.shuffle(data_paths)
 
         num_files_per_rank = len(data_paths) // self.world_size
         local_start = self.local_rank * num_files_per_rank

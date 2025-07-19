@@ -11,6 +11,7 @@ DATASET_REGISTRY = {
     'vlm_sft': SftJSONLIterableDataset,
     'unified_edit': UnifiedEditIterableDataset,
     'simple_edit': EditJSONLIterableDataset,
+    'sharded_edit': EditJSONLIterableDataset,
     'pi_edit': PiEditIterableDataset,
     'pi_edit2': PiEditIterableDataset,
     'pi_edit3': PiEditIterableDataset,
@@ -61,6 +62,13 @@ DATASET_INFO = {
             'num_total_samples': 1000,
             "parquet_info_path": '/home/liliyu/workspace/BAGEL/example_data/bagel_example/editing/parquet_info/seedxedit_multi.json', # information of the parquet files
 		},
+    },
+    'sharded_edit':{
+        'sharded_edit': {
+            'data_dir': '/mnt/weka/checkpoints/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
+            'json_dir': '/mnt/weka/checkpoints/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/annotations_GPT4V/', # information of the parquet files
+		},
+
     },
     'simple_edit':{
         'simple_edit': {

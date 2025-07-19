@@ -61,7 +61,9 @@ def create_pi_dataset(
     # experimental_utils.cache_specs(
     #     config.data.task_mixture_config, f"/home/{getpass.getuser()}/cached_specs"
     # )
-
+    # for task_config in config.data.task_mixture_config.tasks:
+    #     task_config.max_episodes = 200
+        
     task_mixture = dataloader.create_task_mixture(config.data)
 
     mixture = task_mixture.mixtures[split]
@@ -105,19 +107,6 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
         return data_paths
 
 
-    def set_epoch(self, seed=42):
-        if self.data_paths is None:
-            return        
-        data_paths = self.data_paths
-        num_files_per_rank = len(data_paths) // self.world_size
-        print(f"{self.dataset_name}: num_files_per_rank: {num_files_per_rank}")
-        local_start = self.local_rank * num_files_per_rank
-        local_end = (self.local_rank + 1) * num_files_per_rank
-        self.num_files_per_rank = num_files_per_rank
-        self.data_paths_per_rank = data_paths[local_start:local_end]
-
-
-
     def __iter__(self):
         data_paths_per_worker, worker_id = self.get_data_paths_per_worker()
         if self.data_status is not None:
@@ -133,7 +122,9 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
 
         while True:
             frame_idx = 0
-            for row_idx, row in enumerate(data_paths_per_worker, start=row_start_id):
+            # Skip the rows that have already been trained
+            data_paths_per_worker_ = data_paths_per_worker[row_start_id:]
+            for row_idx, row in enumerate(data_paths_per_worker_, start=row_start_id):
                 data = self._init_data()
                 frames = []
                 frame_indexes = []

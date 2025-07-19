@@ -83,17 +83,6 @@ class PiEditIterableDataset(InterleavedBaseIterableDataset):
         data_paths = create_pi_dataset(config, split="train")
         return data_paths
 
-    def set_epoch(self, seed=42):
-        if self.data_paths is None:
-            return        
-        data_paths = self.data_paths
-        num_files_per_rank = len(data_paths) // self.world_size
-        print(f"{self.dataset_name}: num_files_per_rank: {num_files_per_rank}")
-        local_start = self.local_rank * num_files_per_rank
-        local_end = (self.local_rank + 1) * num_files_per_rank
-        self.num_files_per_rank = num_files_per_rank
-        self.data_paths_per_rank = data_paths[local_start:local_end]
-
 
     def __iter__(self):
         data_paths_per_worker, worker_id = self.get_data_paths_per_worker()
@@ -109,7 +98,8 @@ class PiEditIterableDataset(InterleavedBaseIterableDataset):
         )
 
         while True:
-            for row_idx, row in enumerate(data_paths_per_worker, start=row_start_id):
+            data_paths_per_worker_ = data_paths_per_worker[row_start_id:]
+            for row_idx, row in enumerate(data_paths_per_worker_, start=row_start_id):
 
                 data = self._init_data()
                 condition_image = row["image"][self.image_key]

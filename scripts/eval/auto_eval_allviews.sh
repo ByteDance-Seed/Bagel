@@ -69,7 +69,7 @@ for mode in raw ema; do
                         ./eval/gen/gen_images_edit_allviews_ddp.py \
                         --model-path $model_path \
                         --task_name $task_name \
-                        --image_list_str $image_key \
+                        --image_list_str $image_list_str \
                         --resolution $resolution \
                         --run_name $exp_name  \
                         --checkpoint_step ${ckpt} \
