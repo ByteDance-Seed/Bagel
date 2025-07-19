@@ -1,16 +1,15 @@
 #!/bin/bash
 #SBATCH --cpus-per-task=11
-#SBATCH --error=/mnt/weka/slurm_logs/liliyu/img_edit_train/%j_%a_gpu%t_log.err
+#SBATCH --error=/mnt/weka/slurm_logs/liliyu/img_edit_train/%j_%a_log.err
 #SBATCH --gres=gpu:8
-#SBATCH --nodes=8
+#SBATCH --nodes=2
 #SBATCH --ntasks-per-node=1
 #SBATCH --open-mode=append
-#SBATCH --output=/mnt/weka/slurm_logs/liliyu/img_edit_train/%j_%a_gpu%t_log.out
+#SBATCH --output=/mnt/weka/slurm_logs/liliyu/img_edit_train/%j_%a_log.out
 #SBATCH --signal=USR2@90
 #SBATCH --wckey=submitit
-#SBATCH --job-name=bagel_pretrain
-#SBATCH --qos=high_nopreempt
-#SBATCH --exclude=compute-hpc-node-620
+#SBATCH --job-name=bagel
+#SBATCH --qos=hl
 
 # Check if config name is provided
 if [ $# -eq 0 ]; then
@@ -23,7 +22,7 @@ fi
 config_name=$1
 
 # Rename the job to use the config name
-# scontrol update job $SLURM_JOB_ID name=bagel_$config_name
+scontrol update job $SLURM_JOB_ID name=bagel_$config_name
 
 cd /home/liliyu/workspace/BAGEL
 source .venv/bin/activate
@@ -34,6 +33,7 @@ num_nodes=$SLURM_NNODES
 node_rank=$SLURM_NODEID
 master_addr=localhost
 master_port=29503
+model_path=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-7B-MoT
 resume_from=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-7B-MoT
 ckpt_dir=/mnt/weka/checkpoints/liliyu/bagel_ckpt/
 GPUS=8
@@ -64,7 +64,7 @@ srun torchrun --nnodes=$num_nodes --nproc_per_node=$GPUS \
   --max_num_tokens_per_sample $seq_len \
   --batch_size $batch_size \
   --dataset_config_file data/configs/${config_name}.yaml  \
-  --exp_name ${config_name}_gpu${total_gpus}seq${seq_len}_pretrain \
+  --exp_name ${config_name}_gpu${total_gpus}_seq${seq_len} \
   --wandb_runid 0 \
   --num_shard $total_gpus \
   --use_flex True \
