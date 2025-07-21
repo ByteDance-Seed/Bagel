@@ -21,6 +21,7 @@ torchrun \
     --resolution 1024 \
     --max-latent_size 64 \
     --model-path $model_path \
+    --batch_size $BATCH_SIZE \
     --think
 
 
