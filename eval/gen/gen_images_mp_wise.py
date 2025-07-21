@@ -39,7 +39,7 @@ def move_generation_input_to_device(generation_input, device):
 
 def generate_images_with_think(
     prompts, num_timesteps=50, cfg_scale=4.0, cfg_interval=[0, 1.0], cfg_renorm_min=0., timestep_shift=4.0, resolution=1024,
-    max_length=2048, simple_think=False, device=None
+    max_length=2048, simple_think=False, device=None, inference_dtype=torch.float16, autocast_enabled=True
 ):
     batch_size = len(prompts)
     h, w = resolution, resolution
@@ -59,7 +59,7 @@ def generate_images_with_think(
         new_token_ids=new_token_ids,
     )
     generation_input = move_generation_input_to_device(generation_input, device)
-    with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
+    with torch.amp.autocast("cuda", enabled=autocast_enabled, dtype=inference_dtype):
         past_key_values = model.forward_cache_update_text(past_key_values, **generation_input)      
         
     ##########  cfg
@@ -79,14 +79,14 @@ def generate_images_with_think(
         new_token_ids=new_token_ids,
     )
     generation_input = move_generation_input_to_device(generation_input, device)
-    with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
+    with torch.amp.autocast("cuda", enabled=autocast_enabled, dtype=inference_dtype):
         past_key_values = model.forward_cache_update_text(past_key_values, **generation_input)      
         
     ########## think
     tmp_past_key_values = copy.deepcopy(past_key_values)
     tmp_generation_input = model.prepare_start_tokens(newlens, new_rope, new_token_ids)
     tmp_generation_input = move_generation_input_to_device(tmp_generation_input, device)
-    with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
+    with torch.amp.autocast("cuda", enabled=autocast_enabled, dtype=inference_dtype):
         unpacked_latent = model.generate_text(
             past_key_values=tmp_past_key_values,
             max_length=max_length,
@@ -113,11 +113,6 @@ def generate_images_with_think(
             if len(think_output_list) > 1 and think_output_list[1] != "":
                 processed_think = think_output_list[1].strip()
         processed_think_outputs.append(processed_think)
-
-    # print("="*30, "original think", "="*30)
-    # print(original_think_outputs) 
-    # print("="*30, "processed think", "="*30)
-    # print(processed_think_outputs) 
     ########## think
     
     generation_input, newlens, new_rope = model.prepare_prompts(
@@ -128,7 +123,7 @@ def generate_images_with_think(
         new_token_ids=new_token_ids,
     )
     generation_input = move_generation_input_to_device(generation_input, device)
-    with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
+    with torch.amp.autocast("cuda", enabled=autocast_enabled, dtype=inference_dtype):
         past_key_values = model.forward_cache_update_text(past_key_values, **generation_input)
 
     generation_input = model.prepare_vae_latent(
@@ -140,7 +135,7 @@ def generate_images_with_think(
     generation_input = move_generation_input_to_device(generation_input, device)
 
     ########## generate image
-    with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
+    with torch.amp.autocast("cuda", enabled=autocast_enabled, dtype=inference_dtype):
         unpacked_latent = model.generate_image(
             past_key_values=past_key_values,
             num_timesteps=num_timesteps,
@@ -171,7 +166,7 @@ def generate_images_with_think(
     return images, original_think_outputs
 
 
-def generate_images(prompts, num_timesteps=50, cfg_scale=4.0, cfg_interval=[0, 1.0], cfg_renorm_min=0., timestep_shift=1.0, resolution=1024, device=None):
+def generate_images(prompts, num_timesteps=50, cfg_scale=4.0, cfg_interval=[0, 1.0], cfg_renorm_min=0., timestep_shift=1.0, resolution=1024, device=None, inference_dtype=torch.float16, autocast_enabled=True):
     batch_size = len(prompts)
     image_sizes = [(resolution, resolution)] * batch_size
 
@@ -189,7 +184,7 @@ def generate_images(prompts, num_timesteps=50, cfg_scale=4.0, cfg_interval=[0, 1
     generation_input = move_generation_input_to_device(generation_input, device)
 
     with torch.no_grad():
-        with torch.amp.autocast("cuda", enabled=True, dtype=torch.float16):
+        with torch.amp.autocast("cuda", enabled=autocast_enabled, dtype=inference_dtype):
             past_key_values = gen_model.forward_cache_update_text(past_key_values, **generation_input)
 
     generation_input = gen_model.prepare_vae_latent(
@@ -211,7 +206,7 @@ def generate_images(prompts, num_timesteps=50, cfg_scale=4.0, cfg_interval=[0, 1
     )
     generation_input_cfg = move_generation_input_to_device(generation_input_cfg, device)
     with torch.no_grad():
-        with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
+        with torch.amp.autocast("cuda", enabled=autocast_enabled, dtype=inference_dtype):
             unpacked_latent = gen_model.generate_image(
                 past_key_values=past_key_values,
                 num_timesteps=num_timesteps,
@@ -251,6 +246,7 @@ if __name__ == "__main__":
     parser.add_argument("--max_latent_size", type=int, default=64)
     parser.add_argument("--think", action="store_true")
     parser.add_argument('--model-path', type=str, default='hf/BAGEL-7B-MoT/')
+    parser.add_argument("--precision", type=str, default="bf16", choices=["auto", "bf16", "fp16", "fp32"], help="Inference precision. 'auto' detects bf16 support automatically.")
     args = parser.parse_args()
     
     seed = 42
@@ -271,6 +267,27 @@ if __name__ == "__main__":
     world_size = dist.get_world_size()
     device = f"cuda:{rank}"
     
+    # Determine the correct inference data type and autocast state
+    autocast_enabled = True
+    if args.precision == "auto":
+        if torch.cuda.is_available() and torch.cuda.is_bf16_supported():
+            inference_dtype = torch.bfloat16
+        else:
+            inference_dtype = torch.float16
+    elif args.precision == "bf16":
+        inference_dtype = torch.bfloat16
+    elif args.precision == "fp16":
+        inference_dtype = torch.float16
+    else: # fp32
+        inference_dtype = torch.float32
+        autocast_enabled = False
+
+    if rank == 0:
+        if not autocast_enabled:
+            print("Using fp32 for inference. Mixed precision autocast is disabled.")
+        else:
+            print(f"Using {str(inference_dtype).split('.')[-1]} for inference with mixed precision.")
+
     output_dir = args.output_dir
     os.makedirs(output_dir, exist_ok=True)
     if rank == 0:
@@ -357,6 +374,8 @@ if __name__ == "__main__":
                 max_length=2048, 
                 simple_think=False, 
                 device=device,
+                inference_dtype=inference_dtype,
+                autocast_enabled=autocast_enabled,
             )
             for j in range(current_batch_size):
                 if os.path.exists(output_paths[j]):
@@ -377,6 +396,8 @@ if __name__ == "__main__":
                 num_timesteps=num_timesteps,
                 resolution=args.resolution,
                 device=device,
+                inference_dtype=inference_dtype,
+                autocast_enabled=autocast_enabled,
             )
             for j in range(current_batch_size):
                 if os.path.exists(output_paths[j]):
