@@ -73,11 +73,11 @@ DATASET_INFO = {
     'simple_edit':{
         'simple_edit': {
             'data_dir': '/mnt/weka/checkpoints/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
-            "jsonl_path": '/mnt/weka/checkpoints/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/annotations_GPT4V/filtered_combined_splits.jsonl', # information of the parquet files
+            'json_dir': '/mnt/weka/checkpoints/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/annotations_GPT4V/', # information of the parquet files
 		},
         'seed_part1': {
             'data_dir': '/mnt/weka/checkpoints/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/images/',
-            "jsonl_path": '/mnt/weka/checkpoints/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/annotations_GPT4V/filtered_combined_splits.jsonl', # information of the parquet files
+            'json_dir': '/mnt/weka/checkpoints/hf_data/SEED-Data-Edit-Part1-Openimages/auto_editing/openimages/annotations_GPT4V/', # information of the parquet files
 		},
     },
     "pi_edit": {
