@@ -2,6 +2,10 @@
 PYTHONPATH=. python eval/gen/server.py  --weights_path /data/bagel_ckpts/pi_arx_biarm_allview_seq_seedp1_gpu16_seq16384/0050000/  --image_save_dir diverse_batch_folding   --image_key_str image_0,image_2,image_3
 
 PYTHONPATH=. python eval/gen/server.py  --weights_path /data/bagel_ckpts/pi_arxs_ur5_allview_seq_seedp1_gpu16_seq16384/0030000/  --image_save_dir arx_bussing_3k   --image_key_str image_0,image_2,image_3 
+
+PYTHONPATH=. python eval/gen/server.py  --weights_path /mnt/weka/checkpoints/lucy/bagel_ckpt/arx_biarm_allview_shirt_folding_150steps_vfilter_gpu16_seq16384/checkpoints/0015000  --image_save_dir shirt_rollout   --image_key_str image_0,image_2,image_3 
+
+PYTHONPATH=. python eval/gen/server.py  --weights_path /mnt/weka/checkpoints/liliyu/bagel_ckpt/seedp1_0.2_static_mobile_allview_endspan_nolast50_t1.0_gpu16_seq16384_shard8__/checkpoints/0030000  --image_save_dir shirt_rollout   --image_key_str image_0,image_2,image_3 
 """
 
 import numpy as np
@@ -75,6 +79,7 @@ def prepare_model(weights_path: str, mode: int):
     vit_config.num_hidden_layers -= 1
 
     vae_model, vae_config = load_ae(local_path=os.path.join(model_path, "ae.safetensors"))
+    vae_model.to("cuda:0")
 
     config = BagelConfig(
         visual_gen=True,
@@ -105,7 +110,7 @@ def prepare_model(weights_path: str, mode: int):
     # Model Loading and Multi GPU Infernece Preparing
     device_map = infer_auto_device_map(
         model,
-        max_memory={i: "32GiB" for i in range(torch.cuda.device_count())},
+        max_memory={i: "80GiB" for i in range(torch.cuda.device_count())},
         no_split_module_classes=["Bagel", "Qwen2MoTDecoderLayer"],
     )
 
@@ -237,7 +242,7 @@ async def handler(websocket, inferencer, image_keys, image_dir, n_timesteps, wit
             print(prompt)
             inference_hyper['cfg_text_scale'] = cfg_text_scale
             inference_hyper['cfg_img_scale'] = cfg_img_scale
-            image_list = inferencer.multiview_image_editing(source_images, prompt,  **inference_hyper)
+            image_list = inferencer.multiview_image_editing(source_images, prompt,  device="cuda:0", **inference_hyper)
             # output_dict = inferencer(image=image_list, text=prompt, **inference_hyper)
             prompt = prompt.replace(" ", "_")
             for i, image in enumerate(image_list):

@@ -22,29 +22,22 @@ ur5_cleaning_command =[
 
 
 ur5_roll_out =[
-    # 'pick up yellow cup',
-    "put yellow cup in bin",
-    "pick up beige bowl",
-    "put beige bowl in bin",
-    "pick up orange wrapper",
-    # "throw away orange wrapper",
-    # "pick up aluminum foil tray",
-    # "throw away aluminum foil tray",
-    # "pick up plastic bottle",
-    # "throw away plastic bottle",
-    # "pick up chopstick",
-    # "put chopstick in bin",
-    # "pick up blue bowl",
-    # "put blue bowl in bin",
-    # "pick up orange plate",
-    # "put orange plate in bin",
+    "pick up the white plate",
+    "put the white plate in the bin",
+    "pick up the chopstick",
+    "put the chopstick in the bin",
+    "pick up the blue plate",
+    "put the blue plate in the bin",
+    "pick up the orange plate",
+    "put the orange plate in the bin",
 ]
 
 packer = Packer()
 
 ROLL_OUT=True
 if ROLL_OUT:
-    editing_command = ur5_roll_out
+    # editing_command = ur5_roll_out
+    editing_command = ['fold the shirt']*8
 else:
     editing_command = ur5_cleaning_command
 
@@ -56,9 +49,13 @@ async def connect_and_send(args):
 
             from PIL import Image
 
-            source_image_path = "generated_images/generation_inspect/input_0_source_0.png"
-            source_image_path_2 = "generated_images/generation_inspect/input_0_source_1.png"
-            source_image_path_3 = "generated_images/generation_inspect/input_0_source_2.png"
+            source_image_path = "/mnt/weka/artifacts/lucy/export_wm/shirt_folding_150steps_vfilter/all_views/images/71_source_image_0.png"
+            source_image_path_2 = "/mnt/weka/artifacts/lucy/export_wm/shirt_folding_150steps_vfilter/all_views/images/71_source_image_2.png"
+            source_image_path_3 = "/mnt/weka/artifacts/lucy/export_wm/shirt_folding_150steps_vfilter/all_views/images/71_source_image_3.png"
+
+            # source_image_path = "/home/liliyu/workspace/monopi/monopi/experimental/liliyu/export_wm/ur5e4_endspan_lang_1/all_views/images/8_source_image_0.png"
+            # source_image_path_2 = "/home/liliyu/workspace/monopi/monopi/experimental/liliyu/export_wm/ur5e4_endspan_lang_1/all_views/images/8_source_image_2.png"
+            # source_image_path_3 = "/home/liliyu/workspace/monopi/monopi/experimental/liliyu/export_wm/ur5e4_endspan_lang_1/all_views/images/8_source_image_2.png"
 
             for i, editing_instruction in enumerate(editing_command):
                 source_image = np.array(Image.open(source_image_path).resize((224, 224)))
@@ -69,8 +66,9 @@ async def connect_and_send(args):
                     "observation/wrist_0_camera/rgb/image": source_image_2,
                     "observation/left_wrist_0_camera/rgb/image": source_image_2,
                     "observation/right_wrist_0_camera/rgb/image": source_image_3,
-                    "raw_text": "fold all laundry", #editing_instruction,
+                    "raw_text": editing_instruction,
                 }
+                print(editing_instruction)
                 args = (inputs,) 
                 kwargs = {
                     "cfg_text_scale": 6.0,
@@ -99,15 +97,15 @@ async def connect_and_send(args):
                 Image.fromarray(output['future/observation/base_0_camera/rgb/image']).save(target_image_path)
                 # Image.fromarray(output['future/observation/wrist_0_camera/rgb/image']).save(target_image_path_2)
                 Image.fromarray(output['future/observation/left_wrist_0_camera/rgb/image']).save(target_image_path_2)
-                Image.fromarray(output['future/observation/right_wrist_0_camera/rgb/image']).save(target_image_path_3)
+                # Image.fromarray(output['future/observation/right_wrist_0_camera/rgb/image']).save(target_image_path_3)
                 print(f"Image saved as {target_image_path}")
                 print(f"Image saved as {target_image_path_2}")
-                print(f"Image saved as {target_image_path_3}")
+                # print(f"Image saved as {target_image_path_3}")
 
                 if ROLL_OUT:
                     source_image_path = target_image_path
                     source_image_path_2 = target_image_path_2
-                    source_image_path_3 = target_image_path_3
+                    # source_image_path_3 = target_image_path_3
 
     except websockets.ConnectionClosedOK:
         print("Server closed the connection – goodbye!")

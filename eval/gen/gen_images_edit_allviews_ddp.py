@@ -109,7 +109,8 @@ def setup_model(model_path,
         if args.checkpoint_step == "-1":
             weight_path = args.model_path
         else:
-            weight_path = os.path.join("results", args.run_name, "checkpoints", args.checkpoint_step)
+            # weight_path = os.path.join("results", args.run_name, "checkpoints", args.checkpoint_step)
+            weight_path = os.path.join("/mnt/weka/checkpoints/liliyu/bagel_ckpt", args.run_name, "checkpoints", args.checkpoint_step)
         if args.model_mode == "ema":
             model_state_dict_path = os.path.join(weight_path, "ema.safetensors")
         elif args.model_mode == "raw":
