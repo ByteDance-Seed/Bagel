@@ -60,7 +60,6 @@ def create_pi_dataset_old(
 ):
     """Creates a PyTorch dataset from a config name."""
     print(f"rank-{local_rank} creating pi dataset naively")
-    config.data.return_compressed_images = True
     # create an dataset
     # experimental_utils.cache_specs(
     #     config.data.task_mixture_config, f"/home/{getpass.getuser()}/cached_specs"
@@ -81,7 +80,6 @@ def create_pi_dataset(
     config: _config.TrainConfig, *, split: str = "train", num_epochs: int = 1, local_rank=0, world_size=1, rank0_only=False
 ):
     """Creates a PyTorch dataset from a config name."""
-    config.data.return_compressed_images = True
 
     # mixture_path = f"/home/{getpass.getuser()}/{config.exp_name}_task_mixture.pkl"
     slurm_job_id = os.environ["SLURM_JOB_ID"]
@@ -146,7 +144,7 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
         data_dir_list, num_used_data, experiment_name='debug', 
         local_rank=0, world_size=1, num_workers=8, data_status=None, 
         shuffle_lines=False, shuffle_seed=0, n_log_examples=100, image_keys="image_0,image_2",   
-        training_text_loss=False, with_condition=False, force_drop_all_prob=0.15, rank0_only=False
+        training_text_loss=False, with_condition=False, force_drop_all_prob=0.15, rank0_only=False, use_vit_as_condition=False
     ):
         """
         jsonl_path_list: list of jsonl file paths
@@ -160,6 +158,7 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
         self.vit_transform = vit_transform
         self.data_status = data_status
         self.rank0_only = rank0_only
+        self.use_vit_as_condition = use_vit_as_condition
         self.data_paths = self.get_data_paths(local_rank, world_size)
         self.experiment_name = experiment_name
 
@@ -174,7 +173,10 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
 
     def get_data_paths(self, local_rank, world_size):
         config = register_cfg.get_config(self.pi_config)
-        data_paths = create_pi_dataset(config, split="train", local_rank=local_rank, world_size=world_size, rank0_only=self.rank0_only)
+        if self.rank0_only:
+            data_paths = create_pi_dataset(config, split="train", local_rank=local_rank, world_size=world_size)
+        else:
+            data_paths = create_pi_dataset_old(config, split="train", local_rank=local_rank, world_size=world_size)
         return data_paths
 
 
@@ -211,8 +213,8 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
                     frames,
                     frame_indexes,
                     need_loss=False, 
-                    need_vae=True, 
-                    need_vit=self.training_text_loss,
+                    need_vae=True and not self.use_vit_as_condition, 
+                    need_vit=self.training_text_loss or self.use_vit_as_condition,
                 )
 
                 all_text = ""

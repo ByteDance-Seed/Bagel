@@ -88,9 +88,11 @@ class InterleavedBaseIterableDataset(DistributedIterableDataset):
         return data
 
     def _add_video(self, data, frames, frame_indexes, need_loss, need_vae, need_vit=False, enable_cfg=True):
-        assert int(need_loss) + int(need_vae) == 1
+        if not need_vit:
+            assert int(need_loss) + int(need_vae) == 1
 
         if need_loss:
+            # Add noisy images
             for idx, (image, frame_idx) in enumerate(zip(frames, frame_indexes)):
                 current_sequence_plan = {
                     'type': 'vae_image', 

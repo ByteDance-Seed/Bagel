@@ -640,7 +640,7 @@ def main():
             loss_dict["ce"] = ce.detach()
             loss = loss + ce * training_args.ce_weight
         else:
-            assert not training_args.visual_und
+            # assert not training_args.visual_und
             loss_dict["ce"] = torch.tensor(0, device=device)
             total_ce_tokens = torch.tensor(0, device=device)
 

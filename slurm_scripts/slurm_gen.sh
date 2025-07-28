@@ -9,7 +9,7 @@
 #SBATCH --signal=USR2@90
 #SBATCH --wckey=submitit
 #SBATCH --job-name=bagel
-#SBATCH --qos=hl
+#SBATCH --qos=high_nopreempt,tmp_wm,hl
 
 # Check if config name is provided
 if [ $# -eq 0 ]; then
@@ -75,7 +75,7 @@ srun torchrun --nnodes=$num_nodes --nproc_per_node=$GPUS \
   --max_num_tokens_per_sample $seq_len \
   --batch_size $batch_size \
   --dataset_config_file data/configs/${config_name}.yaml  \
-  --exp_name ${config_name}_t${timestep_shift}_gpu${total_gpus}_seq${seq_len}_shard${num_shard}_${post_fix} \
+  --exp_name ${config_name}_t${timestep_shift}_gpu${total_gpus}_seq${seq_len}_shard${num_shard}=${post_fix} \
   --wandb_runid 0 \
   --num_shard $num_shard \
   --num_replicate $num_replicate \

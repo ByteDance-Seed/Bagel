@@ -2,14 +2,14 @@
 #SBATCH --cpus-per-task=11
 #SBATCH --error=/mnt/weka/slurm_logs/liliyu/img_edit_train/%j_%a_gpu%t_log.err
 #SBATCH --gres=gpu:8
-#SBATCH --nodes=8
+#SBATCH --nodes=4
 #SBATCH --ntasks-per-node=1
 #SBATCH --open-mode=append
 #SBATCH --output=/mnt/weka/slurm_logs/liliyu/img_edit_train/%j_%a_gpu%t_log.out
 #SBATCH --signal=USR2@90
 #SBATCH --wckey=submitit
 #SBATCH --job-name=bagel_pretrain
-#SBATCH --qos=high_nopreempt
+#SBATCH --qos=high_nopreempt,tmp_wm,hl
 
 # Check if config name is provided
 if [ $# -eq 0 ]; then
@@ -39,7 +39,7 @@ ckpt_dir=/mnt/weka/checkpoints/liliyu/bagel_ckpt/
 GPUS=8
 
 batch_size=1
-seq_len=16384
+seq_len=32768
 export PYTHONPATH=/home/liliyu/workspace/BAGEL
 total_gpus=$((num_nodes * GPUS))
 num_shard=8
