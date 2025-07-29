@@ -1,7 +1,7 @@
 # Copyright 2025 Bytedance Ltd. and/or its affiliates.
 # SPDX-License-Identifier: Apache-2.0
 
-from .interleave_datasets import UnifiedEditIterableDataset, EditJSONLIterableDataset, PiEditIterableDataset, PiEditAllViewsIterableDataset
+from .interleave_datasets import UnifiedEditIterableDataset, EditJSONLIterableDataset, PiEditIterableDataset, PiEditAllViewsIterableDataset, PiRobotQAAllViewsIterableDataset,PiT2IAllViewsIterableDataset, PiTextOnlyIterableDataset,PiWebQAIterableDataset
 from .t2i_dataset import T2IIterableDataset, T2IIWebDataset
 from .vlm_dataset import SftJSONLIterableDataset
 
@@ -23,6 +23,10 @@ DATASET_REGISTRY = {
     'blip30_longcaption': T2IIWebDataset,
     'blip30_journeyDb': T2IIWebDataset,
     'blip30_shortcaption': T2IIWebDataset,
+    'pi_robot_bbox_cap': PiRobotQAAllViewsIterableDataset,
+    'pi_t2i_dataset': PiT2IAllViewsIterableDataset,
+    'pi_textonly': PiTextOnlyIterableDataset,
+    'pi_webqa_dataset': PiWebQAIterableDataset,
 }
 
 
