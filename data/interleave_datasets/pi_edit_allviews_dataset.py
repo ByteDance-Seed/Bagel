@@ -64,6 +64,7 @@ def create_pi_dataset_old(
     # experimental_utils.cache_specs(
     #     config.data.task_mixture_config, f"/home/{getpass.getuser()}/cached_specs"
     # )
+    # config.data.max_episodes_per_task=10_000
     task_mixture = dataloader.create_task_mixture(config.data)
     mixture = task_mixture.mixtures[split]
     dt = mixture.get_dataset(num_epochs=num_epochs, shuffle=True, shard_info=ShardInfo(local_rank, world_size))
@@ -86,7 +87,7 @@ def create_pi_dataset(
     mixture_path = f"/tmp/{config.exp_name}_task_mixture_{slurm_job_id}.pkl"
     torch.distributed.barrier()
     real_local_rank = int(os.environ["LOCAL_RANK"])
-    print(f"Real local rank {real_local_rank}, global rank {local_rank}")
+    # print(f"Real local rank {real_local_rank}, global rank {local_rank}")
     if real_local_rank == 0:
         print(f"Real local rank {real_local_rank}, global rank {local_rank}, entering mixture generation.")
         mp.set_start_method('spawn', force=True)
@@ -103,9 +104,9 @@ def create_pi_dataset(
             else:
                 tensor = torch.ones(1, dtype=torch.int64)
             tensor = tensor.to(torch.cuda.current_device())
-            print(f"rank {local_rank}, local rank {real_local_rank}: before reduction: {tensor.item()}")
+            # print(f"rank {local_rank}, local rank {real_local_rank}: before reduction: {tensor.item()}")
             reduction_result = torch.distributed.all_reduce(tensor, op=torch.distributed.ReduceOp.SUM, async_op=False)
-            print(f"rank {local_rank}, local rank {real_local_rank}: after reduction: {tensor.item()}")
+            # print(f"rank {local_rank}, local rank {real_local_rank}: after reduction: {tensor.item()}")
             if tensor.item() == world_size:
                 break
             time.sleep(30)
@@ -119,9 +120,9 @@ def create_pi_dataset(
             else:
                 tensor = torch.ones(1, dtype=torch.int64)
             tensor = tensor.to(torch.cuda.current_device())
-            print(f"other rank {local_rank}, local rank {real_local_rank}: before reduction: {tensor.item()}")
+            # print(f"other rank {local_rank}, local rank {real_local_rank}: before reduction: {tensor.item()}")
             reduction_result = torch.distributed.all_reduce(tensor, op=torch.distributed.ReduceOp.SUM, async_op=False)
-            print(f"other rank {local_rank}, local rank {real_local_rank}: after reduction: {tensor.item()}")
+            # print(f"other rank {local_rank}, local rank {real_local_rank}: after reduction: {tensor.item()}")
             if tensor.item() == world_size:
                 break
             time.sleep(30)

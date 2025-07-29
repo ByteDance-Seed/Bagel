@@ -62,8 +62,14 @@ class T2IIWebDataset(InterleavedBaseIterableDataset):
             data_paths_per_worker_ = data_paths_per_worker[tar_start_id:] #skip the tar file that's alrady trained
             for tarfile_idx, tar_file_path in enumerate(data_paths_per_worker_, start=tar_start_id):
                     wds_obj = wds.WebDataset(tar_file_path, nodesplitter=lambda x: x).shuffle(10000)
-        
-                    for row_idx, row in enumerate(wds_obj):
+
+                    try:
+                        peek = next(iter(wds_obj))
+                    except StopIteration:
+                        print(f"[Warning] {tar_file_path} is empty. Skipping.")
+                        continue
+
+                    for row_idx, row in enumerate(wds.WebDataset(tar_file_path, nodesplitter=lambda x: x).shuffle(10000)):
                         # skip the row in this tar file that's already trained
                         if row_idx < row_start_id:
                             continue
