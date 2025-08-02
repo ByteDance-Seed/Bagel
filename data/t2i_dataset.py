@@ -86,6 +86,7 @@ class T2IIWebDataset(InterleavedBaseIterableDataset):
                                 need_loss=True,
                                 need_vae=False,
                                 need_vit=False,
+                                enable_cfg=False,
                             )
                             if row_idx <= self.n_log_examples:
                                 # Create side-by-side full_example with text
@@ -178,6 +179,7 @@ class I2TIWebDataset(InterleavedBaseIterableDataset):
                                 need_loss=False,
                                 need_vae=False,
                                 need_vit=True,
+                                enable_cfg=False,
                             )
                             data = self._add_text(data, f"Generate image from caption: {caption}", need_loss=True)
                             if row_idx <= self.n_log_examples:
