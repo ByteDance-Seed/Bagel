@@ -9,7 +9,7 @@
 #SBATCH --signal=USR2@90
 #SBATCH --wckey=submitit
 #SBATCH --job-name=bagel
-#SBATCH --qos=hl
+#SBATCH --qos=high_nopreempt
 
 # Check if config name is provided
 if [ $# -eq 0 ]; then
@@ -46,7 +46,17 @@ ckpt_dir=/mnt/weka/checkpoints/liliyu/bagel_ckpt/
 GPUS=8
 
 batch_size=1
-seq_len=16384
+# expected_num_tokens=32768   
+expected_num_tokens=16384   
+max_num_tokens=$((expected_num_tokens+2048))
+max_num_tokens_per_sample=$((expected_num_tokens/2))
+prefer_buffer_before=$((expected_num_tokens/2))
+echo "expected_num_tokens: $expected_num_tokens"
+echo "max_num_tokens: $max_num_tokens"
+echo "max_num_tokens_per_sample: $max_num_tokens_per_sample"
+echo "prefer_buffer_before: $prefer_buffer_before"
+
+
 export PYTHONPATH=/home/liliyu/workspace/BAGEL
 total_gpus=$((num_nodes * GPUS))
 num_shard=8
@@ -54,9 +64,14 @@ num_replicate=$((total_gpus/num_shard))
 
 timestep_shift=1.0
 
+# Basic NCCL diagnostics & async error handling
+export NCCL_DEBUG=INFO            # or WARN in production
+export NCCL_DEBUG_SUBSYS=ALL      # prints collectives, topo, p2p (optional)
+export NCCL_ASYNC_ERROR_HANDLING=1
+
 # Fine-tuning
-srun torchrun --nnodes=$num_nodes --nproc_per_node=$GPUS \
-    --rdzv_id=$SLURM_JOB_ID --rdzv_backend=c10d --rdzv_endpoint=$HOSTNAME:$master_port  train/pretrain_unified_navit.py \
+srun -l torchrun --nnodes=$num_nodes --nproc_per_node=$GPUS \
+    --rdzv_id=$SLURM_JOB_ID --rdzv_backend=c10d --rdzv_endpoint=$HOSTNAME:$master_port --log-dir /mnt/weka/slurm_logs/liliyu/img_edit_train/%j_%N_rank_%t/ --redirect 3   train/pretrain_unified_navit.py \
   --layer_module Qwen2MoTDecoderLayer \
   --model_path $model_path \
   --resume-from $resume_from \
@@ -70,16 +85,19 @@ srun torchrun --nnodes=$num_nodes --nproc_per_node=$GPUS \
   --lr 2e-5 \
   --num_worker 1 \
   --timestep_shift $timestep_shift \
-  --expected_num_tokens $seq_len \
-  --max_num_tokens $seq_len \
-  --max_num_tokens_per_sample $seq_len \
+  --expected_num_tokens $expected_num_tokens \
+  --max_num_tokens $max_num_tokens \
+  --max_num_tokens_per_sample $max_num_tokens_per_sample \
+  --prefer_buffer_before $prefer_buffer_before \
   --batch_size $batch_size \
   --dataset_config_file data/configs/${config_name}.yaml  \
-  --exp_name ${config_name}_t${timestep_shift}_gpu${total_gpus}_seq${seq_len}_shard${num_shard}=${post_fix} \
+  --exp_name ${config_name}_t${timestep_shift}_gpu${total_gpus}_seq${expected_num_tokens}_shard${num_shard}=${post_fix} \
   --wandb_runid 0 \
   --num_shard $num_shard \
   --num_replicate $num_replicate \
   --use_flex True \
   --ema 0.995 \
-  --save_every 1000 \
+  --save_every 100 \
+  --vit_cond_dropout_prob 0.05 \
   --ce_weight 0.1
+#   --save_every 1000 \
