@@ -278,7 +278,9 @@ class PackedAttention(Qwen2Attention):
             for query_states, key_states, value_states, attention_mask_per_sample in zip(
                 unpacked_query_states, unpacked_key_states, unpacked_value_states, attention_mask
             ):
-                with sdpa_kernel(backends=[SDPBackend.EFFICIENT_ATTENTION]):
+                # Allow fallback to math kernel when Efficient Attention is unavailable.
+                # This avoids RuntimeError: "No available kernel" in environments lacking Efficient Attention support.
+                with sdpa_kernel(backends=[SDPBackend.EFFICIENT_ATTENTION, SDPBackend.MATH]):
                     attn_output = scaled_dot_product_attention(
                         query_states.to(torch.bfloat16).unsqueeze(0), 
                         key_states.to(torch.bfloat16).unsqueeze(0), 
@@ -462,7 +464,9 @@ class PackedAttentionMoT(Qwen2Attention):
             for query_states, key_states, value_states, attention_mask_per_sample in zip(
                 unpacked_query_states, unpacked_key_states, unpacked_value_states, attention_mask
             ):
-                with sdpa_kernel(backends=[SDPBackend.EFFICIENT_ATTENTION]):
+                # Allow fallback to math kernel when Efficient Attention is unavailable.
+                # This avoids RuntimeError: "No available kernel" in environments lacking Efficient Attention support.
+                with sdpa_kernel(backends=[SDPBackend.EFFICIENT_ATTENTION, SDPBackend.MATH]):
                     attn_output = scaled_dot_product_attention(
                         query_states.to(torch.bfloat16).unsqueeze(0), 
                         key_states.to(torch.bfloat16).unsqueeze(0), 

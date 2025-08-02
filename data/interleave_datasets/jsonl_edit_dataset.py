@@ -72,6 +72,7 @@ class EditJSONLIterableDataset(InterleavedBaseIterableDataset):
                 all_data += raw_data
             data_paths.extend([(json_data, image_dir) for json_data in all_data])
         print(f"image_dir: {image_dir}")
+        print(f"Done loading for task {self.dataset_name} with {len(data_paths)} examples")
         return data_paths
 
 

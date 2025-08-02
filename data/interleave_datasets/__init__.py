@@ -9,3 +9,4 @@ from .pi_robot_bbox_cap_dataset import PiRobotQAAllViewsIterableDataset
 from .pi_t2i_dataset import PiT2IAllViewsIterableDataset
 from .pi_textonly_dataset import PiTextOnlyIterableDataset
 from .pi_webqa_dataset import PiWebQAIterableDataset
+from .text_only_dataset import TextIterableDataset

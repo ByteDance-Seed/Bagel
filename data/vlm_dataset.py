@@ -19,10 +19,10 @@ PngImagePlugin.MAX_TEXT_CHUNK = MaximumDecompressedSize * MegaByte
 
 class SftJSONLIterableDataset(DistributedIterableDataset):
     def __init__(
-        self, dataset_name, transform, tokenizer, frame_sampler, 
-        jsonl_path_list, data_dir_list, num_used_data, 
+        self, dataset_name, transform, tokenizer, 
+        jsonl_path_list, data_dir_list, frame_sampler=None, num_used_data=None, 
         local_rank=0, world_size=1, num_workers=8, data_status=None, 
-        shuffle_lines=False, shuffle_seed=0,
+        shuffle_lines=False, shuffle_seed=0, experiment_name=None
     ):
         """
         jsonl_path_list: list of jsonl file paths
@@ -34,6 +34,7 @@ class SftJSONLIterableDataset(DistributedIterableDataset):
         self.tokenizer = tokenizer
         self.frame_sampler = frame_sampler
         self.data_status = data_status
+        self.experiment_name = experiment_name
         self.data_paths = self.get_data_paths(
             jsonl_path_list, 
             data_dir_list, 
@@ -60,7 +61,7 @@ class SftJSONLIterableDataset(DistributedIterableDataset):
             if shuffle_lines:
                 self.rng.seed(shuffle_seed)
                 self.rng.shuffle(raw_data)
-            raw_data = raw_data[:num_data_point]
+            # raw_data = raw_data[:num_data_point]
             data_paths.extend([(json_data, image_dir) for json_data in raw_data])
         return data_paths
 
@@ -113,7 +114,6 @@ class SftJSONLIterableDataset(DistributedIterableDataset):
                 image_tensor_list = []
                 text_ids_list = []
                 sequence_plan = []
-
                 try:
                     data_item = json.loads(data)
                     raw_images = None

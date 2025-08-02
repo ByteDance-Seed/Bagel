@@ -22,6 +22,7 @@ class InterleavedBaseIterableDataset(DistributedIterableDataset):
 
     def _add_text(self, data, text, need_loss, enable_cfg=True):
         text_ids = self.tokenizer.encode(text)
+        assert not len(text_ids) < 0
         data['num_tokens'] += len(text_ids)
         data['text_ids_list'].append(text_ids)
         data['sequence_plan'].append(
@@ -37,7 +38,6 @@ class InterleavedBaseIterableDataset(DistributedIterableDataset):
 
     def _add_image(self, data, image, need_loss, need_vae, need_vit, enable_cfg=True):
         assert need_loss or need_vae or need_vit
-
         if need_loss:
             data['sequence_plan'].append(
                 {

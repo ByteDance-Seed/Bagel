@@ -593,7 +593,7 @@ def main():
         pin_memory=True,
         collate_fn=collate_wrapper(),
         drop_last=True,
-        prefetch_factor=data_args.prefetch_factor,
+        prefetch_factor=data_args.prefetch_factor if data_args.prefetch_factor > 0 else None,
     )
 
     # Prepare models for training:
@@ -611,6 +611,10 @@ def main():
         data = data.cuda(device).to_dict()
         data_indexes = data.pop('batch_data_indexes', None)
         ce_loss_weights = data.pop('ce_loss_weights', None)
+        
+        if training_args.visual_und and data.get('vit_token_seqlens', None) is None:
+            print('vit_token_seqlens is None, skipping this batch')
+            continue
         with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
             if training_args.visual_gen:
                 with torch.no_grad():
@@ -714,12 +718,12 @@ def main():
         #         if dataset.data_table is not None:
         #             wandb.log({"data_table": dataset.data_table})
 
-        if curr_step % training_args.save_every == 0:
+        if curr_step > 0 and curr_step % training_args.save_every == 0:
             if dist.get_rank() == 0:
                 gather_list = [None] * dist.get_world_size()
             else:
                 gather_list = None
-            dist.gather_object(data_status, gather_list, dst=0)
+            dist.gather_object(data_status, gather_list)
 
             FSDPCheckpoint.fsdp_save_ckpt(
                 ckpt_dir=training_args.checkpoint_dir, 

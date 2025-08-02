@@ -17,13 +17,11 @@ import random
 from PIL import Image, ImageFile, PngImagePlugin
 # gazelle:ignore torch
 import torch
-from monopi.model.configs import config as _config
-from monopi.model.configs import registered_configs as register_cfg
-from monopi.model.data import dataloader
-from monopi.experimental.dibyaghosh import utils as experimental_utils
+
 from monopi.model.configs import registered_configs as register_cfg
 from monopi.lib.py.image import image as lib_image
 import monopi.lib.py.ml.jax.string_encode as string_encode
+
 import wandb
 import getpass
 import dataclasses
@@ -33,110 +31,14 @@ import numpy as np
 import cloudpickle
 import multiprocessing as mp
 import time
+import re
+from .pi_data_utils import convert_loc_to_bbox, create_pi_dataset_old, create_pi_dataset
 
 Image.MAX_IMAGE_PIXELS = 200000000
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 MaximumDecompressedSize = 1024
 MegaByte = 2 ** 20
 PngImagePlugin.MAX_TEXT_CHUNK = MaximumDecompressedSize * MegaByte
-
-MISTAKE_MAP = {
-    0: False,
-    1: True,
-}  # -1: no mistake annotation
-
-@dataclasses.dataclass(frozen=True)
-class ShardInfo:
-    """Information about a data source shard."""
-
-    # Index of the current shard.
-    shard_id: int = 0
-    # Total number of shards.
-    num_shards: int = 1
-
-    
-def create_pi_dataset_old(
-    config: _config.TrainConfig, *, split: str = "train", num_epochs: int = 1, local_rank=0, world_size=1, rank0_only=False
-):
-    """Creates a PyTorch dataset from a config name."""
-    print(f"rank-{local_rank} creating pi dataset naively")
-    # create an dataset
-    # experimental_utils.cache_specs(
-    #     config.data.task_mixture_config, f"/home/{getpass.getuser()}/cached_specs"
-    # )
-    # config.data.max_episodes_per_task=10_000
-    task_mixture = dataloader.create_task_mixture(config.data)
-    mixture = task_mixture.mixtures[split]
-    dt = mixture.get_dataset(num_epochs=num_epochs, shuffle=True, shard_info=ShardInfo(local_rank, world_size))
-    return dt
-
-
-def create_task_mixture_worker(pickled_bytes):
-    config_data, output_path = cloudpickle.loads(pickled_bytes)
-    task_mixture = dataloader.create_task_mixture(config_data).mixtures
-    with open(output_path, "wb") as f:
-        cloudpickle.dump(task_mixture, f)
-
-def create_pi_dataset(
-    config: _config.TrainConfig, *, split: str = "train", num_epochs: int = 1, local_rank=0, world_size=1, rank0_only=False
-):
-    """Creates a PyTorch dataset from a config name."""
-
-    # mixture_path = f"/home/{getpass.getuser()}/{config.exp_name}_task_mixture.pkl"
-    slurm_job_id = os.environ["SLURM_JOB_ID"]
-    mixture_path = f"/tmp/{config.exp_name}_task_mixture_{slurm_job_id}.pkl"
-    torch.distributed.barrier()
-    real_local_rank = int(os.environ["LOCAL_RANK"])
-    # print(f"Real local rank {real_local_rank}, global rank {local_rank}")
-    if real_local_rank == 0:
-        print(f"Real local rank {real_local_rank}, global rank {local_rank}, entering mixture generation.")
-        mp.set_start_method('spawn', force=True)
-        pickled_bytes = cloudpickle.dumps((config.data, mixture_path))
-        process = mp.Process(target=create_task_mixture_worker, args=(pickled_bytes,))
-        process.start()
-        torch.distributed.barrier() # sync before wait loop
-        # waiting loop, 
-        # key idea is to contribute 1 when mixture_path exists and process finishes.
-        # when all rank finishes, it will be equal to world size
-        while True:
-            if process.is_alive() or not os.path.exists(mixture_path):
-                tensor = torch.zeros(1, dtype=torch.int64)
-            else:
-                tensor = torch.ones(1, dtype=torch.int64)
-            tensor = tensor.to(torch.cuda.current_device())
-            # print(f"rank {local_rank}, local rank {real_local_rank}: before reduction: {tensor.item()}")
-            reduction_result = torch.distributed.all_reduce(tensor, op=torch.distributed.ReduceOp.SUM, async_op=False)
-            # print(f"rank {local_rank}, local rank {real_local_rank}: after reduction: {tensor.item()}")
-            if tensor.item() == world_size:
-                break
-            time.sleep(30)
-            print(f"rank {local_rank}, local rank {real_local_rank}: Waiting for all rank")
-        process.join()
-    else:
-        torch.distributed.barrier()
-        while True:
-            if not os.path.exists(mixture_path):
-                tensor = torch.zeros(1, dtype=torch.int64)
-            else:
-                tensor = torch.ones(1, dtype=torch.int64)
-            tensor = tensor.to(torch.cuda.current_device())
-            # print(f"other rank {local_rank}, local rank {real_local_rank}: before reduction: {tensor.item()}")
-            reduction_result = torch.distributed.all_reduce(tensor, op=torch.distributed.ReduceOp.SUM, async_op=False)
-            # print(f"other rank {local_rank}, local rank {real_local_rank}: after reduction: {tensor.item()}")
-            if tensor.item() == world_size:
-                break
-            time.sleep(30)
-            print(f"other rank {local_rank}, local rank {real_local_rank}: wait for all rank")
-    torch.distributed.barrier()
-    mp.set_start_method('fork', force=True)
-
-    with open(mixture_path, "rb") as f:
-        task_mixture = cloudpickle.load(f)
-        print(f"rank-{local_rank} loading task mixture from {mixture_path}")
-
-    mixture = task_mixture[split]
-    dt = mixture.get_dataset(num_epochs=num_epochs, shuffle=True, shard_info=ShardInfo(local_rank, world_size))
-    return dt
 
 
 class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
