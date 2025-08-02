@@ -122,6 +122,7 @@ class PiT2IAllViewsIterableDataset(InterleavedBaseIterableDataset):
                     need_loss=True, 
                     need_vae=False,
                     need_vit=False,
+                    enable_cfg=False,
                 )
 
                 if len(data) == 0:

@@ -110,6 +110,7 @@ class PiWebQAIterableDataset(InterleavedBaseIterableDataset):
                         need_loss=False, 
                         need_vae=False, 
                         need_vit=True, 
+                        enable_cfg=False,
                     )
                     try:
                         prompt = str(string_encode.decode_str(row["caption"]))

@@ -101,6 +101,7 @@ class TextIterableDataset(InterleavedBaseIterableDataset):
                             need_loss=False,
                             need_vae=False,
                             need_vit=True,
+                            enable_cfg=False,
                         )
                         if row_idx <= self.n_log_examples:
                             # Create side-by-side full_example with text

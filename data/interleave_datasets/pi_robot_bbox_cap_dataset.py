@@ -119,6 +119,7 @@ class PiRobotQAAllViewsIterableDataset(InterleavedBaseIterableDataset):
                         need_loss=False, 
                         need_vae=False,
                         need_vit=True,
+                        enable_cfg=False,
                     )
                     prompt = str(string_encode.decode_str(row["caption"]))
                     try:
