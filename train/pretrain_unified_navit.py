@@ -105,11 +105,11 @@ class ModelArguments:
         metadata={"help": "Probability of dropping text embeddings during training."}
     )
     vae_cond_dropout_prob: float = field(
-        default=0.3,
+        default=0.1,
         metadata={"help": "Probability of dropping VAE latent inputs during training."}
     )
     vit_cond_dropout_prob: float = field(
-        default=0.3,
+        default=0.4,
         metadata={"help": "Probability of dropping ViT visual features during training."}
     )
 
