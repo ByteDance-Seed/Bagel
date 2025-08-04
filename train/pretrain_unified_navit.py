@@ -173,7 +173,7 @@ class TrainingArguments:
     )
     save_dtype: str = field(
         default=None,
-        metadata={"help": "Data type to save the model in. If None, use the same dtype as the model."}
+        metadata={"help": "Data type to save the model in. Should be set as one of the torch dtype names, e.g., 'bfloat16', 'float16', 'float32', etc. If None, use the same dtype as the model."}
     )
     wandb_project: str = field(
         default="bagel",
@@ -683,6 +683,7 @@ def main():
                 gather_list = None
             dist.gather_object(data_status, gather_list, dst=0)
 
+            save_dtype = getattr(torch, training_args.save_dtype) if training_args.save_dtype is not None else None
             FSDPCheckpoint.fsdp_save_ckpt(
                 ckpt_dir=training_args.checkpoint_dir, 
                 train_steps=curr_step, 
@@ -693,7 +694,7 @@ def main():
                 logger=logger,
                 fsdp_config=fsdp_config,
                 data_status=gather_list,
-                save_dtype=training_args.save_dtype,
+                save_dtype=save_dtype,
             )
         
         if curr_step == training_args.total_steps - 1:

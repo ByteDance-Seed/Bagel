@@ -159,6 +159,7 @@ You are encouraged to adjust any of these hyperparameters to fit your GPU budget
 | ---------------- | --------------------- | ---------------------------------------------------- |
 | `results_dir`    | `results`             | Root directory for logs and metrics.                 |
 | `checkpoint_dir` | `results/checkpoints` | Checkpoints are saved here.                          |
+| `save_dtype`     | `None`                | Data type for saving model checkpoints.              |
 | `log_every`      | `10`                  | Steps between console / W\&B logs.                   |
 | `wandb_project`  | `bagel`               | Weights & Biases project name.                       |
 | `wandb_name`     | `run`                 | Run name inside the project.                         |
