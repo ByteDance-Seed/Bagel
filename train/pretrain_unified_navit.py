@@ -484,7 +484,7 @@ def main():
         resume_from, logger, model, ema_model, resume_from_ema=finetune_from_ema
     )
     ema_model = fsdp_ema_setup(ema_model, fsdp_config)
-    fsdp_model = fsdp_wrapper(model, fsdp_config)
+    fsdp_model = fsdp_wrapper(model, fsdp_config, training_args)
     apply_activation_checkpointing(
         fsdp_model, 
         checkpoint_wrapper_fn=functools.partial(
@@ -672,7 +672,7 @@ def main():
                 data_status[item['dataset_name']] = {}
             data_status[item['dataset_name']][item['worker_id']] = item['data_indexes']
 
-        if curr_step > 0 and curr_step % training_args.save_every == 0:
+        if (curr_step > 0 and curr_step % training_args.save_every == 0) or curr_step == training_args.total_steps - 1:
             if dist.get_rank() == 0:
                 gather_list = [None] * dist.get_world_size()
             else:
@@ -690,6 +690,9 @@ def main():
                 fsdp_config=fsdp_config,
                 data_status=gather_list
             )
+        
+        if curr_step == training_args.total_steps - 1:
+            break
 
     logger.info("Done!")
     if dist.get_rank() == 0:

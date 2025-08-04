@@ -5,6 +5,7 @@ import functools
 import os
 
 import torch
+import torch.nn as nn
 import torch.distributed as dist
 import torch.distributed.fsdp._traversal_utils as traversal_utils
 from torch.distributed.device_mesh import init_device_mesh
@@ -45,7 +46,7 @@ class FSDPConfig:
         self.num_shard = num_shard
 
 
-def fsdp_wrapper(original_model, fsdp_config, ignored_modules=[]):
+def fsdp_wrapper(original_model, fsdp_config, training_args, ignored_modules=[]):
     if fsdp_config.sharding_strategy == 'HYBRID_SHARD':
         device_mesh = init_device_mesh(
             "cuda", 
@@ -80,6 +81,7 @@ def fsdp_wrapper(original_model, fsdp_config, ignored_modules=[]):
         backward_prefetch=BackwardPrefetch[fsdp_config.backward_prefetch],
         cpu_offload=CPUOffload(offload_params=fsdp_config.cpu_offload),
         device_mesh=device_mesh,
+        use_orig_params=True if training_args.freeze_llm or training_args.freeze_vit or training_args.freeze_und else False,
     )
 
 
