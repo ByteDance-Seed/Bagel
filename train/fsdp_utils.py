@@ -246,11 +246,11 @@ def grad_checkpoint_check_fn(module):
     return isinstance(module, module_options)
 
 
-def fsdp_ema_setup(ema_model, fsdp_config, ignored_modules=[]):
+def fsdp_ema_setup(ema_model, fsdp_config, training_args, ignored_modules=[]):
     for param in ema_model.parameters():
         param.requires_grad = False
 
-    ema_model = fsdp_wrapper(ema_model, fsdp_config, ignored_modules=ignored_modules)
+    ema_model = fsdp_wrapper(ema_model, fsdp_config, training_args, ignored_modules=ignored_modules)
     return ema_model
 
 

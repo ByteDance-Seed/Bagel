@@ -483,7 +483,7 @@ def main():
     model, ema_model = FSDPCheckpoint.try_load_ckpt(
         resume_from, logger, model, ema_model, resume_from_ema=finetune_from_ema
     )
-    ema_model = fsdp_ema_setup(ema_model, fsdp_config)
+    ema_model = fsdp_ema_setup(ema_model, fsdp_config, training_args)
     fsdp_model = fsdp_wrapper(model, fsdp_config, training_args)
     apply_activation_checkpointing(
         fsdp_model, 
