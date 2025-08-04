@@ -24,7 +24,7 @@ We offer examples in both raw-image folder and parquet shard formats. For other 
        ├── images/                    # JPEG / PNG frames
        └── llava_ov_si.jsonl          # vision‑language SFT conversations
    ```
-3. Edit every `your_data_path` placeholder in **`data/dataset_info.py`**.
+3. Edit every `your_data_path` placeholder in **`data/dataset_info.py`** and in **`bagel_example/editing/parquet_info/seedxedit_multi.json`** in the data directory.
 4. *(Optional)*  Extend `DATASET_INFO` with your own parquet shards or JSONL files to mix extra data.
 
 ---
