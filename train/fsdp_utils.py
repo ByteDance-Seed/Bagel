@@ -97,6 +97,7 @@ class FSDPCheckpoint:
         data_status,
         logger, 
         fsdp_config,
+        save_dtype=None,
     ):
         save_path = os.path.join(ckpt_dir, f"{train_steps:07d}")
         os.makedirs(save_path, exist_ok=True)
@@ -109,6 +110,8 @@ class FSDPCheckpoint:
                 FullStateDictConfig(rank0_only=True, offload_to_cpu=True),
             ):
                 ema_state_dict = ema_model.state_dict()
+                if save_dtype is not None:
+                    ema_state_dict = {k: v.to(dtype=save_dtype) for k, v in ema_state_dict.items()}
                 if dist.get_rank() == 0:
                     save_file(ema_state_dict, os.path.join(save_path, "ema.safetensors"))
 
@@ -118,6 +121,8 @@ class FSDPCheckpoint:
             FullStateDictConfig(rank0_only=True, offload_to_cpu=True),
         ):
             model_state_dict = model.state_dict()
+            if save_dtype is not None:
+                model_state_dict = {k: v.to(dtype=save_dtype) for k, v in model_state_dict.items()}
             if dist.get_rank() == 0:
                 save_file(model_state_dict, os.path.join(save_path, "model.safetensors"))
 

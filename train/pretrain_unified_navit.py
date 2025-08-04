@@ -171,6 +171,10 @@ class TrainingArguments:
         default="results/checkpoints",
         metadata={"help": "Root directory for model checkpoints."}
     )
+    save_dtype: str = field(
+        default=None,
+        metadata={"help": "Data type to save the model in. If None, use the same dtype as the model."}
+    )
     wandb_project: str = field(
         default="bagel",
         metadata={"help": "Weights & Biases project name."}
@@ -688,7 +692,8 @@ def main():
                 scheduler=scheduler, 
                 logger=logger,
                 fsdp_config=fsdp_config,
-                data_status=gather_list
+                data_status=gather_list,
+                save_dtype=training_args.save_dtype,
             )
         
         if curr_step == training_args.total_steps - 1:
