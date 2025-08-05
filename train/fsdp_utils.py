@@ -139,7 +139,7 @@ class FSDPCheckpoint:
                 raise NotImplementedError
 
             optimizer_save_path = os.path.join(
-                save_path, f"optimizer.{shard_index:05d}-of-{total_shards:05d}.pt"
+                f"{save_path}_optimizer", f"optimizer.{shard_index:05d}-of-{total_shards:05d}.pt"
             )
             if fsdp_config.sharding_strategy == "FULL_SHARD":
                 torch.save(optimizer.state_dict(), optimizer_save_path)
@@ -209,7 +209,7 @@ class FSDPCheckpoint:
                 raise NotImplementedError
 
             optimizer_state_dict_path = os.path.join(
-                resume_from, f"optimizer.{shard_index:05d}-of-{total_shards:05d}.pt"
+                f"{resume_from}_optimizer", f"optimizer.{shard_index:05d}-of-{total_shards:05d}.pt"
             )
             optimizer_state_dict = torch.load(optimizer_state_dict_path, map_location="cpu", weights_only=True)
             optimizer.load_state_dict(optimizer_state_dict)
