@@ -15,6 +15,7 @@ from torch.distributed.fsdp import (
     BackwardPrefetch,
     ShardingStrategy,
     FullStateDictConfig,
+    ShardedStateDictConfig,
     StateDictType,
 )
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
@@ -104,20 +105,23 @@ class FSDPCheckpoint:
         if ema_model is not None:
             with FSDP.state_dict_type(
                 ema_model,
-                StateDictType.FULL_STATE_DICT,
-                FullStateDictConfig(rank0_only=True, offload_to_cpu=True),
+                StateDictType.SHARDED_STATE_DICT, #StateDictType.FULL_STATE_DICT,
+                ShardedStateDictConfig(offload_to_cpu=True), #FullStateDictConfig(rank0_only=True, offload_to_cpu=True),
             ):
+                torch.cuda.empty_cache()          # right before state_dict()
                 ema_state_dict = ema_model.state_dict()
                 if save_bf16:
                     ema_state_dict = {k: v.to(torch.bfloat16) if v.dtype == torch.float32 else v for k, v in ema_state_dict.items()}
-                if dist.get_rank() == 0:
-                    save_file(ema_state_dict, os.path.join(save_path, "ema.safetensors"))
+                # if dist.get_rank() == 0:
+                    # save_file(ema_state_dict, os.path.join(save_path, "ema.safetensors"))
+                torch.save(ema_state_dict, os.path.join(save_path, f"ema_rank{dist.get_rank():05d}.pt"))
 
         with FSDP.state_dict_type(
             model,
             StateDictType.FULL_STATE_DICT,
             FullStateDictConfig(rank0_only=True, offload_to_cpu=True),
         ):
+            torch.cuda.empty_cache()    # right before state_dict()
             model_state_dict = model.state_dict()
             if save_bf16:
                 model_state_dict = {k: v.to(torch.bfloat16) if v.dtype == torch.float32 else v for k, v in model_state_dict.items()}

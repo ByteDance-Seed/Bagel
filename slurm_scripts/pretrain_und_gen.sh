@@ -2,14 +2,14 @@
 #SBATCH --cpus-per-task=11
 #SBATCH --error=/mnt/weka/slurm_logs/liliyu/img_edit_train/%j_%a_gpu%t_log.err
 #SBATCH --gres=gpu:8
-#SBATCH --nodes=6
+#SBATCH --nodes=4
 #SBATCH --ntasks-per-node=1
 #SBATCH --open-mode=append
 #SBATCH --output=/mnt/weka/slurm_logs/liliyu/img_edit_train/%j_%a_gpu%t_log.out
 #SBATCH --signal=USR2@90
 #SBATCH --wckey=submitit
 #SBATCH --job-name=bagel_pretrain
-#SBATCH --qos=hl
+#SBATCH --qos=tmp_wm
 
 # Check if config name is provided
 if [ $# -eq 0 ]; then
@@ -23,6 +23,7 @@ config_name=$1
 
 # Rename the job to use the config name
 # scontrol update job $SLURM_JOB_ID name=bagel_$config_name
+
 
 cd /home/liliyu/workspace/BAGEL
 source .venv/bin/activate
@@ -40,7 +41,8 @@ GPUS=8
 
 batch_size=1
 
-expected_num_tokens=32768   
+expected_num_tokens=32768 
+# expected_num_tokens=16384
 max_num_tokens=$((expected_num_tokens+2048))
 max_num_tokens_per_sample=$((expected_num_tokens/2))
 prefer_buffer_before=$((expected_num_tokens/2))
@@ -54,6 +56,11 @@ total_gpus=$((num_nodes * GPUS))
 num_shard=8
 num_replicate=$((total_gpus/num_shard))
 timestep_shift=1.0
+
+# Basic NCCL diagnostics & async error handling
+export NCCL_DEBUG=INFO            # or WARN in production
+export NCCL_DEBUG_SUBSYS=ALL      # prints collectives, topo, p2p (optional)
+export NCCL_ASYNC_ERROR_HANDLING=1
 
 #   --finetune-from-ema True \  #Turn it off when resuming from a pi trained checkpoint
 # Fine-tuning

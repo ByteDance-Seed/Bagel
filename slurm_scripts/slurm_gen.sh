@@ -9,7 +9,7 @@
 #SBATCH --signal=USR2@90
 #SBATCH --wckey=submitit
 #SBATCH --job-name=bagel
-#SBATCH --qos=hl
+#SBATCH --qos=tmp_wm
 
 # Check if config name is provided
 if [ $# -eq 0 ]; then
@@ -40,13 +40,15 @@ node_rank=$SLURM_NODEID
 master_addr=localhost
 master_port=29503
 model_path=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-7B-MoT
-# resume_from=/mnt/weka/checkpoints/liliyu/bagel_ckpt/seed_blip3o_all_robots_jul19_gpu64seq16384_pretrain/checkpoints/0008500
-resume_from=$model_path
+# resume_from=/mnt/weka/checkpoints/liliyu/bagel_ckpt/seed_blip3o_all_robots_w_notext_pickle_t1.0_gpu32_seq32768_shard8_pretrain/checkpoints/0017000
+resume_from=/mnt/weka/checkpoints/liliyu/bagel_ckpt/seed_blip3o_all_robots_jul19_t1.0_gpu64_seq16384_shard8_pretrain_lr1e-5/checkpoints/0016000
+
+# resume_from=$model_path
 ckpt_dir=/mnt/weka/checkpoints/liliyu/bagel_ckpt/
 GPUS=8
 
 batch_size=1
-expected_num_tokens=16384   
+expected_num_tokens=32768   
 max_num_tokens=$((expected_num_tokens+2048))
 max_num_tokens_per_sample=$((expected_num_tokens/2))
 prefer_buffer_before=$((expected_num_tokens/2))
@@ -96,4 +98,4 @@ srun -l torchrun --nnodes=$num_nodes --nproc_per_node=$GPUS \
   --use_flex True \
   --visual_und False \
   --ema 0.995 \
-  --save_every 100
+  --save_every 1000

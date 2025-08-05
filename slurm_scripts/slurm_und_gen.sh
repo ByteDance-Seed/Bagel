@@ -9,7 +9,7 @@
 #SBATCH --signal=USR2@90
 #SBATCH --wckey=submitit
 #SBATCH --job-name=bagel
-#SBATCH --qos=high_nopreempt
+#SBATCH --qos=hl
 
 # Check if config name is provided
 if [ $# -eq 0 ]; then
@@ -17,7 +17,6 @@ if [ $# -eq 0 ]; then
     echo "Example: $0 seedp1_0.2_arx_biarm_allview_endspan"
     exit 1
 fi
-
 
 # Get config name from command line argument
 config_name=$1
@@ -36,7 +35,6 @@ source .venv/bin/activate
 # Fine-tuning
 num_nodes=$SLURM_NNODES
 node_rank=$SLURM_NODEID
-
 master_addr=localhost
 master_port=29503
 model_path=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-7B-MoT
@@ -70,8 +68,8 @@ export NCCL_DEBUG_SUBSYS=ALL      # prints collectives, topo, p2p (optional)
 export NCCL_ASYNC_ERROR_HANDLING=1
 
 # Fine-tuning
-srun -l torchrun --nnodes=$num_nodes --nproc_per_node=$GPUS \
-    --rdzv_id=$SLURM_JOB_ID --rdzv_backend=c10d --rdzv_endpoint=$HOSTNAME:$master_port --log-dir /mnt/weka/slurm_logs/liliyu/img_edit_train/%j_%N_rank_%t/ --redirect 3   train/pretrain_unified_navit.py \
+srun -l torchrun --nnodes=$num_nodes --node_rank=$SLURM_NODEID --nproc_per_node=$GPUS \
+    --rdzv_id=$SLURM_JOB_ID --rdzv_backend=c10d --rdzv_endpoint=$HOSTNAME:$master_port  --log-dir /mnt/weka/slurm_logs/liliyu/img_edit_train/%j_%N_rank_%t/ --redirect 3 train/pretrain_unified_navit.py \
   --layer_module Qwen2MoTDecoderLayer \
   --model_path $model_path \
   --resume-from $resume_from \
@@ -97,7 +95,7 @@ srun -l torchrun --nnodes=$num_nodes --nproc_per_node=$GPUS \
   --num_replicate $num_replicate \
   --use_flex True \
   --ema 0.995 \
-  --save_every 100 \
-  --vit_cond_dropout_prob 0.05 \
+  --save_every 1000 \
+  --vit_cond_dropout_prob 0.01 \
   --ce_weight 0.1
 #   --save_every 1000 \

@@ -168,14 +168,32 @@ def prepare_model(weights_path: str, mode: int):
             device_map=device_map,
             offload_folder="offload",
         ).eval()
+    elif args.mode == 4:           # --- FP8 ---
+        from transformers import AutoModelForCausalLM, FineGrainedFP8Config
+
+        fp8_cfg = FineGrainedFgdP8Config(          # defaults = E4M3, 128×128 blocks
+            fp8_format="e4m3",
+            weight_block_size=(128, 128),
+            activation_block_size=128,
+            use_layer_norm_fp16=True,            # keep LN/softmax in FP16 for stability
+        )
+
+        model = AutoModelForCausalLM.from_pretrained(
+            ckpt_path,                           # folder or Hub id
+            device_map=device_map,               # Accelerate still does the sharding
+            torch_dtype="auto",                  # obey dtype in config.json
+            quantization_config=fp8_cfg,         # <-- goes here
+            offload_folder="offload",            # optional, same as before
+            offload_state_dict=True,             # optional
+        ).eval()
     else:
         raise NotImplementedError
     
     print("===================  Model loaded successfully  ==============\n")
 
     # Inferencer Preparing 
-    vae_transform = ImageTransform(224, 224, 16)
-    vit_transform = ImageTransform(224, 224, 14)
+    vae_transform = ImageTransform(256, 320, 16)
+    vit_transform = ImageTransform(256, 320, 14)
     inferencer = InterleaveInferencer(
         model=model,
         vae_model=vae_model,
@@ -225,7 +243,7 @@ async def handler(websocket, inferencer, image_keys, image_dir, n_timesteps, wit
             num_timesteps=n_timesteps,
             cfg_renorm_min=0.0,
             cfg_renorm_type="global",
-            image_shapes=(224, 224),
+            image_shapes=(256, 320),
             with_condition=with_condition,
         )
         def infer(inputs: dict, cfg_text_scale=4.0, cfg_img_scale=1.3) -> dict:
@@ -235,7 +253,7 @@ async def handler(websocket, inferencer, image_keys, image_dir, n_timesteps, wit
             from datetime import datetime
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")            
             source_images = [Image.fromarray(inputs[image_key_map[x]]) for x in image_keys]
-            source_images = [_resize_with_pad_pil(source_image, 224, 224, Image.Resampling.LANCZOS) for source_image in source_images]
+            source_images = [_resize_with_pad_pil(source_image, 256, 320, Image.Resampling.LANCZOS) for source_image in source_images]
             for i, source_image in enumerate(source_images):
                 source_image.save(f"{image_dir}/{file_count}_source_{i}_{timestamp}.png")
             prompt = inputs['raw_text']
@@ -259,6 +277,13 @@ async def handler(websocket, inferencer, image_keys, image_dir, n_timesteps, wit
                 args, kwargs = unpackb(payload)
                 outputs = infer(*args, **kwargs)
                 payload = packer.pack(outputs)
+                # import zlib
+                # compressed_payload = zlib.compress(payload, level=9)
+                # compressed_payload = zlib.compress(compressed_payload)
+                # # INSERT_YOUR_CODE
+                # print(f"Payload size before compression: {len(payload)} bytes")
+                # print(f"Payload size after compression: {len(compressed_payload)} bytes")
+                # await websocket.send(compressed_payload)
                 await websocket.send(payload)
             except websockets.ConnectionClosed:
                 logger.info(f"Connection from {websocket.remote_address} closed")

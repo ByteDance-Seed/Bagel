@@ -226,7 +226,8 @@ class InterleaveInferencer:
         )
 
         images = []
-        for img_latent in unpacked_latent[0].split(196):
+        per_image_latent_size = image_shape[0][0]//16 * image_shape[0][1]//16
+        for img_latent in unpacked_latent[0].split(per_image_latent_size):
             print(img_latent.shape)
             images.append(self.decode_image(img_latent, image_shape[0]))
 

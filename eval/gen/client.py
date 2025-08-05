@@ -37,7 +37,7 @@ packer = Packer()
 ROLL_OUT=True
 if ROLL_OUT:
     # editing_command = ur5_roll_out
-    editing_command = ['fold the shirt']*8
+    editing_command = ['fold the shirt']*20
 else:
     editing_command = ur5_cleaning_command
 
@@ -79,7 +79,9 @@ async def connect_and_send(args):
                 import time
                 start_time = time.time()
                 await ws.send(data)
+                import zlib
                 response = await ws.recv()
+                # response = zlib.decompress(response)
                 end_time = time.time()
                 print(f"Time taken for sending and receiving: {end_time - start_time} seconds")
 

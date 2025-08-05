@@ -162,6 +162,11 @@ if __name__ == "__main__":
     parser.add_argument('--run_name', type=str, default='SEED_part23_run0')
     parser.add_argument('--model_mode', type=str, default='ema')
     parser.add_argument('--wandb_project_name', type=str, default='bagel-edit-eval')
+    parser.add_argument('--ids_for_fixed_prompt', type=int, default=-1)  #this is for fixed prompt, if -1, then use the prompt in the metadata
+    parser.add_argument('--cfg_text_scale', type=float, default=5.0)
+    parser.add_argument('--cfg_img_scale', type=float, default=1.2)
+    parser.add_argument('--num_timesteps', type=int, default=25)
+
     args = parser.parse_args()
     ################################    
     # Init env 
@@ -202,11 +207,11 @@ if __name__ == "__main__":
     )
 
     inference_hyper=dict(
-        cfg_text_scale=4.0, # 4.0,
-        cfg_img_scale=1.2, # 2.0,
+        cfg_text_scale=args.cfg_text_scale, # 4.0,
+        cfg_img_scale=args.cfg_img_scale, # 2.0,
         cfg_interval=[0.0, 1.0],
         timestep_shift=3.0, #3.0,
-        num_timesteps=50,
+        num_timesteps=args.num_timesteps,
         cfg_renorm_min=0.0,
         cfg_renorm_type="text_channel",
         image_shapes=(args.resolution, args.resolution),
@@ -222,10 +227,11 @@ if __name__ == "__main__":
                  f"text{inference_hyper['cfg_text_scale']}_"
                  f"img{inference_hyper['cfg_img_scale']}_"
                  f"shift{inference_hyper['timestep_shift']}_"
+                 f"timesteps{inference_hyper['num_timesteps']}_"
                  f"res{inference_hyper['image_shapes'][0]}")
 
 
-    gen_suffix = f'{args.task_name}_{args.image_key}_{args.model_mode}_{gen_suffix}'
+    gen_suffix = f'prompt{args.ids_for_fixed_prompt}_{args.task_name}_{args.image_key}_{args.model_mode}_{gen_suffix}'
     output_dir = os.path.join(output_dir,gen_suffix)
     os.makedirs(output_dir, exist_ok=True)  
     if rank == 0:
@@ -250,6 +256,13 @@ if __name__ == "__main__":
     ################################################################
     start_time = time.time()
     outpath = output_dir
+
+
+    fixed_prompt_list = [
+        "remove the human in this image, keep the robot arm and other objects the same",
+        "remove human body in this image",
+        "remove the human in this image, keep the robot arm, desk and other objects the same",
+    ]
     for idx in range(start, end):
         metadata = metadatas[idx]
         outpath = os.path.join(output_dir, f"{idx:0>5}")
@@ -257,7 +270,11 @@ if __name__ == "__main__":
         with open(os.path.join(outpath, "metadata.jsonl"), "w", encoding="utf-8") as fp:
             json.dump(metadata, fp)
 
-        prompt = metadata['instruction']
+        if args.ids_for_fixed_prompt == -1: 
+            prompt = metadata['instruction']
+        else:
+            prompt = fixed_prompt_list[args.ids_for_fixed_prompt]
+
         source_image = Image.open(metadata['source_image']).resize(inference_hyper['image_shapes'])
         if "target_image" in metadata:  
             target_image = Image.open(metadata['target_image']).resize(inference_hyper['image_shapes'])
@@ -342,21 +359,25 @@ if __name__ == "__main__":
         for img_dir in sorted(os.listdir(output_dir)):
             img_dir_path = os.path.join(output_dir, img_dir)
             if os.path.isdir(img_dir_path):
-                # Log images from this directory
-                metadata_path = os.path.join(img_dir_path, "metadata.jsonl")
-                with open(metadata_path, "r", encoding="utf-8") as f:
-                    metadata = json.load(f)
-                    prompt = metadata["instruction"]
+                if args.ids_for_fixed_prompt == -1:
+                    metadata_path = os.path.join(img_dir_path, "metadata.jsonl")
+                    with open(metadata_path, "r", encoding="utf-8") as f:
+                        metadata = json.load(f)
+                        prompt = metadata["instruction"]
                 source_image_path = os.path.join(img_dir_path, "00000_source.png")
                 edited_image_path = os.path.join(img_dir_path, "00000_edited.png")
                 target_image_path = os.path.join(img_dir_path, "00000_target.png")
                 assert os.path.exists(source_image_path)
                 assert os.path.exists(edited_image_path)
-                assert os.path.exists(target_image_path)
+                if not os.path.exists(target_image_path):
+                    # INSERT_YOUR_CODE
+                    # If the target image does not exist, create a white image
+                    white_image = Image.new('RGB', (args.resolution, args.resolution), color='white')
+                    white_image.save(target_image_path)
+                # assert os.path.exists(target_image_path)
                 test_table.add_data(img_dir, wandb.Image(source_image_path), prompt, wandb.Image(edited_image_path), wandb.Image(target_image_path))
-        wandb.log({"Editing results" : test_table}, step=int(args.checkpoint_step))
+        wandb.log({"Editing results" : test_table})
 
 
     # Finish the wandb run
     wandb.finish()
-        

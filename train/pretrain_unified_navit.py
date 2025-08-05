@@ -723,6 +723,7 @@ def main():
                 gather_list = [None] * dist.get_world_size()
             else:
                 gather_list = None
+            torch.cuda.empty_cache() 
             dist.gather_object(data_status, gather_list)
 
             FSDPCheckpoint.fsdp_save_ckpt(
