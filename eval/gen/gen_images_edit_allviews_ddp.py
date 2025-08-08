@@ -110,7 +110,7 @@ def setup_model(model_path,
             weight_path = args.model_path
         else:
             # weight_path = os.path.join("results", args.run_name, "checkpoints", args.checkpoint_step)
-            weight_path = os.path.join("/mnt/weka/checkpoints/liliyu/bagel_ckpt", args.run_name, "checkpoints", args.checkpoint_step)
+            weight_path = os.path.join(args.checkpoint_directory, args.run_name, "checkpoints", args.checkpoint_step)
         if args.model_mode == "ema":
             model_state_dict_path = os.path.join(weight_path, "ema.safetensors")
         elif args.model_mode == "raw":
@@ -118,13 +118,14 @@ def setup_model(model_path,
         else:
             raise ValueError(f"Invalid model mode: {args.model_mode}")
         print(" ====== Loading model state dict from {} ====== ".format(model_state_dict_path))
-
-        model_state_dict = load_file(model_state_dict_path, device="cpu")
+        # Load model state dict directly to target device to avoid CPU->GPU transfer
+        model_state_dict = load_file(model_state_dict_path, device=str(device))
         msg = model.load_state_dict(model_state_dict, strict=False)
         if rank == 0:
             print(msg)
         del model_state_dict
-
+    
+    print(" ====== Done loading, move model to devices ====== ")
     model = model.to(device).to(torch.bfloat16).eval()
     vae_model = vae_model.to(device).to(torch.bfloat16).eval()
     gen_model = model
@@ -164,7 +165,10 @@ if __name__ == "__main__":
     parser.add_argument('--model_mode', type=str, default='ema')
     parser.add_argument("--with_condition", type=bool, default=False)
     parser.add_argument('--wandb_project_name', type=str, default='bagel-edit-eval')
+    parser.add_argument('--condition_on_vit', type=bool, default=False)
+    parser.add_argument('--checkpoint_directory', type=str, default="/mnt/weka/checkpoints/liliyu/bagel_ckpt")
     args = parser.parse_args()
+    print(args)
     ################################    
     # Init env 
     ################################
@@ -283,7 +287,7 @@ if __name__ == "__main__":
                     target_image_paths.append(target_image_path)
                 else:
                     target_image_paths.append(None)
-        image_list = inferencer.multiview_image_editing(source_images, prompt, device=device, **inference_hyper )
+        image_list = inferencer.multiview_image_editing(source_images, prompt, device=device, condition_on_vit=args.condition_on_vit, **inference_hyper )
 
         sample_count = 0
         for i, (sample, source_image, target_image) in enumerate(zip(image_list, source_image_paths, target_image_paths)):

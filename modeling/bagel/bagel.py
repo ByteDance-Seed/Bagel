@@ -357,6 +357,93 @@ class Bagel(PreTrainedModel):
 
         return generation_input, newlens, new_rope
 
+    def prepare_vit_videos(self, curr_kvlens, curr_rope, videos, transforms, new_token_ids):
+        """Prepare packed inputs for visual understanding with VIT on videos.
+
+        Args:
+            curr_kvlens: list[int] – current key/value memory lengths for each sample.
+            curr_rope: list[int] – current rotary position index for each sample.
+            videos: list[list[PIL.Image]] – each sample contains a list of frames (images).
+            transforms: callable – preprocessing pipeline that turns an image into a tensor (C,H,W).
+            new_token_ids: dict – dictionary that stores special token ids such as 'start_of_image', 'end_of_image'.
+        Returns:
+            generation_input: dict containing all packed tensors needed by forward_cache_update_vit.
+            newlens: list[int] updated key/value lengths.
+            new_rope: list[int] updated rotary positions.
+        """
+        packed_vit_token_indexes = []
+        vit_token_seqlens = []
+        packed_vit_tokens = []
+        packed_vit_position_ids = []
+        packed_text_ids, packed_text_indexes = [], []
+        packed_seqlens, packed_position_ids, packed_indexes = [], [], []
+        packed_key_value_indexes = []
+
+        _curr = curr = 0
+        newlens, new_rope = [], []
+        for video, curr_kvlen, curr_position_id in zip(videos, curr_kvlens, curr_rope):
+            # add key/value indexes produced so far
+            packed_key_value_indexes.extend(range(curr, curr + curr_kvlen))
+            curr += curr_kvlen
+
+            video_len = 0  # sequence length for this video (text + vit tokens)
+            for image in video:
+                # [START_IMG]
+                packed_text_ids.append(new_token_ids['start_of_image'])
+                packed_text_indexes.append(_curr)
+                packed_indexes.append(curr)
+                curr += 1
+                _curr += 1
+
+                image_tensor = transforms(image)
+                vit_position_ids = self.get_flattened_position_ids(
+                    image_tensor.size(1), image_tensor.size(2),
+                    self.vit_patch_size,
+                    max_num_patches_per_side=self.vit_max_num_patch_per_side,
+                )
+                vit_tokens = patchify(image_tensor, self.vit_patch_size)
+                packed_vit_tokens.append(vit_tokens)
+                num_img_tokens = vit_tokens.shape[0]
+                packed_vit_position_ids.append(vit_position_ids)
+                vit_token_seqlens.append(num_img_tokens)
+
+                packed_vit_token_indexes.extend(range(_curr, _curr + num_img_tokens))
+                packed_indexes.extend(range(curr, curr + num_img_tokens))
+                curr += num_img_tokens
+                _curr += num_img_tokens
+
+                # [END_IMG]
+                packed_text_ids.append(new_token_ids['end_of_image'])
+                packed_text_indexes.append(_curr)
+                packed_indexes.append(curr)
+                curr += 1
+                _curr += 1
+
+                # same global position id for tokens of this frame
+                packed_position_ids.extend([curr_position_id] * (num_img_tokens + 2))
+                curr_position_id += 1  # next frame uses incremental position id
+                video_len += num_img_tokens + 2
+
+            packed_seqlens.append(video_len)
+            newlens.append(curr_kvlen + video_len)
+            new_rope.append(curr_position_id)
+
+        generation_input = {
+            "packed_text_ids": torch.tensor(packed_text_ids, dtype=torch.long),
+            "packed_text_indexes": torch.tensor(packed_text_indexes, dtype=torch.long),
+            "vit_token_seqlens": torch.tensor(vit_token_seqlens, dtype=torch.int),
+            "packed_vit_tokens": torch.cat(packed_vit_tokens, dim=0),
+            "packed_vit_position_ids": torch.cat(packed_vit_position_ids, dim=0),
+            "packed_vit_token_indexes": torch.tensor(packed_vit_token_indexes, dtype=torch.long),
+            "packed_position_ids": torch.tensor(packed_position_ids, dtype=torch.long),
+            "packed_seqlens": torch.tensor(packed_seqlens, dtype=torch.int),
+            "packed_indexes": torch.tensor(packed_indexes, dtype=torch.long),
+            "packed_key_value_indexes": torch.tensor(packed_key_value_indexes, dtype=torch.long),
+            "key_values_lens": torch.tensor(curr_kvlens, dtype=torch.int),
+        }
+
+        return generation_input, newlens, new_rope
+
     @torch.no_grad
     def forward_cache_update_vit(
         self,

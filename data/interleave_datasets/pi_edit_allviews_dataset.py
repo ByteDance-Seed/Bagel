@@ -47,7 +47,7 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
         data_dir_list, num_used_data, experiment_name='debug', 
         local_rank=0, world_size=1, num_workers=8, data_status=None, 
         shuffle_lines=False, shuffle_seed=0, n_log_examples=100, image_keys="image_0,image_2",   
-        training_text_loss=False, with_condition=False, force_drop_all_prob=0.15, rank0_only=False, use_vit_as_condition=False
+        training_text_loss=False, with_condition=False, force_drop_all_prob=0.15, rank0_only=False, use_vit_as_condition=False, add_vit_as_condition=False
     ):
         """
         jsonl_path_list: list of jsonl file paths
@@ -70,6 +70,7 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
         self.image_key_list = [key.strip() for key in image_keys.split(',')]
         self.training_text_loss = training_text_loss
         self.with_condition = with_condition
+        self.add_vit_as_condition = add_vit_as_condition
         self.force_drop_all_prob = force_drop_all_prob
         self.set_epoch()
 
@@ -116,8 +117,8 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
                     frames,
                     frame_indexes,
                     need_loss=False, 
-                    need_vae=True and not self.use_vit_as_condition, 
-                    need_vit=self.training_text_loss or self.use_vit_as_condition,
+                    need_vae=not self.use_vit_as_condition, 
+                    need_vit=self.training_text_loss or self.use_vit_as_condition or self.add_vit_as_condition,
                 )
 
                 all_text = ""

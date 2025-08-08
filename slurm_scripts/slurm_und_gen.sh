@@ -89,7 +89,7 @@ srun -l torchrun --nnodes=$num_nodes --node_rank=$SLURM_NODEID --nproc_per_node=
   --prefer_buffer_before $prefer_buffer_before \
   --batch_size $batch_size \
   --dataset_config_file data/configs/${config_name}.yaml  \
-  --exp_name ${config_name}_t${timestep_shift}_gpu${total_gpus}_seq${expected_num_tokens}_shard${num_shard}=${post_fix} \
+  --exp_name ${config_name}_t${timestep_shift}_gpu${total_gpus}_seq${expected_num_tokens}_shard${num_shard} \
   --wandb_runid 0 \
   --num_shard $num_shard \
   --num_replicate $num_replicate \

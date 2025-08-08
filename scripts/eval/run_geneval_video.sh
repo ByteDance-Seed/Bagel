@@ -65,6 +65,7 @@ exp_name=seed_blip3o_all_robots_jul19_gpu64_seq16384_shard8_pretraintest
 exp_name=seed_blip3o_all_robots_w_notext_pickle_t1.0_gpu32_seq32768_shard8_pretrain
 exp_name=seed_blip3o_all_robots_jul19_pickle_t1.0_gpu32_seq32768_shard8_pretrain_lr8e-6
 exp_name="seed_blip3o_all_robots_jul19_t1.0_gpu16_seq16384_shard8=_"
+exp_name="pi_arxs_ur5_allview_endspan_nolast50_seedp1_gpu16_seq16384"
 # task_name=arx_biarm_endspan_lang
 image_list_str="image_0,image_2,image_3"
 task_names=(
@@ -77,13 +78,33 @@ task_names=(
     g1h1_drawer_rollout
     # g1h1_drawer_ood_rollout
 )
-ckpt=0005000
-ckpt=0010000
-# ckpt=0040000
-# ckpt=0014000
-ckpt=0015000
-ckpts=(0010000 0020000)
-ckpts=(0100000 0080000 0060000 0040000 0020000)
+ckpts=(0040000 0020000 0010000)
+condition_on_vit=false
+
+# exp_name="h1g1_vit_t1.0_gpu16_seq16384_shard8=_"
+# ckpts=(0020000)
+# condition_on_vit=True
+# task_names=(
+#     h1g1_dishes_in_sink_rollout
+#     h1g1_make_the_bed_rollout
+#     g1h1_drawer_rollout
+#     # g1h1_drawer_ood_rollout
+# )
+
+
+# exp_name="pi_h1g1_allview_seq_seedp1_gpu16_seq16384"
+# task_names=(
+#     h1g1_dishes_in_sink_rollout
+#     h1g1_make_the_bed_rollout
+#     g1h1_drawer_rollout
+#     # g1h1_drawer_ood_rollout
+# )
+# ckpts=(0060000 0040000 0020000)
+
+
+# exp_name="seed_blip3o_robot_448px_t1.0_gpu16_seq32768_shard8=_"
+# ckpts=(0015000)
+# resolution=448
 
 # exp_name="seed_blip3o_all_robots_jul19_t1.0_gpu16_seq16384_shard8=_"
 # ckpts=(0100000 0050000 0025000)
@@ -104,10 +125,12 @@ for ckpt in "${ckpts[@]}"; do
             --run_name $exp_name  \
             --checkpoint_step ${ckpt} \
             --model_mode $mode  \
-            --wandb_project_name $wandb_project_name 
+            --wandb_project_name $wandb_project_name \
+            --checkpoint_directory "results"
             # --with_condition $with_condition
     done
 done
+            # --condition_on_vit false \
 
 # GPUS=4
 # step=0002000
