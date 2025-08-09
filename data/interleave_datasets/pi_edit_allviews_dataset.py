@@ -130,7 +130,7 @@ class PiEditAllViewsIterableDataset(InterleavedBaseIterableDataset):
 
                 if self.training_text_loss:
                     # prompt = str(string_encode.decode_str(row["robot_task_string"]))
-                    prompt = str(string_encode.decode_str(row["prompt"]))
+                    prompt = str(string_encode.decode_str(row["robot_task_string"]))
                     prompt = f"Task: {prompt}, Subtask: "
                     all_text += prompt
                     data = self._add_text(data, prompt, need_loss=False)
