@@ -508,9 +508,13 @@ def main():
 
 
     if dist.get_rank() == 0:
+        print("==================  fsdp_model setting ==================")
         print(fsdp_model)
         for name, param in model.named_parameters():
-            print(name, param.requires_grad)
+            print(name, param.requires_grad, param.dtype)
+        print("==================  vae_model setting ==================")
+        for name, param in vae_model.named_parameters():
+            print(name, param.requires_grad, param.dtype)
 
     # Setup optimizer and scheduler
     optimizer = torch.optim.AdamW(
