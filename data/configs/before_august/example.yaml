@@ -1,0 +1,88 @@
+# t2i_pretrain:
+#   dataset_names:
+#   - t2i
+#   image_transform_args:
+#     image_stride: 16
+#     max_image_size: 1024
+#     min_image_size: 512
+#   is_mandatory: true
+#   num_used_data: # The sum should be larger that NUM_GPUS x NUM_WORKERS
+#   - 10
+#   weight: 1
+
+# unified_edit:
+#   dataset_names:
+#   - seedxedit_multi
+#   image_transform_args:
+#     image_stride: 16
+#     max_image_size: 224
+#     min_image_size: 224
+
+#   vit_image_transform_args:
+#     image_stride: 14
+#     max_image_size: 512
+#     min_image_size: 224
+#   is_mandatory: false
+#   num_used_data:
+#   - 10
+#   weight: 1
+
+
+# simple_edit:
+#   dataset_names:
+#   - simple_edit
+#   image_transform_args:
+#     image_stride: 16
+#     max_image_size: 224
+#     min_image_size: 224
+#   vit_image_transform_args:
+#     image_stride: 14
+#     max_image_size: 512
+#     min_image_size: 224
+#   is_mandatory: true
+#   shuffle_lines: True
+#   shuffle_seed: 0
+#   num_used_data:
+#   - 16656
+#   weight: 1
+
+
+
+pi_edit:
+  dataset_names:
+  - pi_edit
+  pi_config_name: mar18_ur5_future_img_pred_w0_1_last_image #mar18_arx_single_future_img
+  image_transform_args:
+    image_stride: 16
+    max_image_size: 224
+    min_image_size: 224
+  vit_image_transform_args:
+    image_stride: 14
+    max_image_size: 512
+    min_image_size: 224
+  is_mandatory: true
+  shuffle_lines: True
+  shuffle_seed: 0
+  num_used_data:
+  - 16656
+  weight: 1
+
+
+
+# vlm_sft:
+#   dataset_names:
+#   - llava_ov
+#   image_transform_args:
+#     image_stride: 14
+#     max_image_size: 980
+#     min_image_size: 378
+#     max_pixels: 2_007_040
+#   frame_sampler_args:
+#     max_num_frames: 12
+#     min_num_frames: 8
+#   is_mandatory: true
+#   shuffle_lines: True
+#   shuffle_seed: 0
+#   num_used_data:
+#   - 1000
+#   weight: 1

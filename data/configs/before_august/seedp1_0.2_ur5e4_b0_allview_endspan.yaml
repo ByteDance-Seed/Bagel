@@ -1,0 +1,37 @@
+simple_edit:
+  dataset_names:
+  - seed_part1
+  image_transform_args:
+    image_stride: 16
+    max_image_size: 224
+    min_image_size: 224
+  vit_image_transform_args:
+    image_stride: 14
+    max_image_size: 224
+    min_image_size: 224
+  is_mandatory: true
+  shuffle_lines: True
+  shuffle_seed: 0
+  num_used_data:
+  - 16656
+  weight: 0.2
+
+pi_edit_allviews:
+  dataset_names:
+  - arx_endspan_224  # Set pi data name for tracking
+  pi_config_name: mar18_ur5e4_future_img_pred_w0_1_last_image  # Set pi data here 
+  image_keys: "image_0,image_2"
+  image_transform_args:
+    image_stride: 16
+    max_image_size: 224
+    min_image_size: 224
+  vit_image_transform_args:
+    image_stride: 14
+    max_image_size: 224
+    min_image_size: 224
+  is_mandatory: true
+  shuffle_lines: True
+  shuffle_seed: 0
+  num_used_data:
+  - 16656
+  weight: 1

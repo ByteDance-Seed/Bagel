@@ -1,0 +1,128 @@
+## Image editing (total weight 0.7)
+sharded_edit:
+  dataset_names:
+  - sharded_edit
+  image_transform_args:
+    image_stride: 16
+    max_image_size: 224
+    min_image_size: 224
+  vit_image_transform_args:
+    image_stride: 14
+    max_image_size: 224
+    min_image_size: 224
+  shuffle_lines: True
+  shuffle_seed: 0
+  num_used_data:
+  - 16656
+  weight: 0.10
+
+
+pi_edit_allviews:
+  dataset_names:
+  - arx_endspan_224  # Set pi data name for tracking
+  pi_config_name: filtered_jun6_gc_mixed_last_span_rate_090  # Set pi data here 
+  rank0_only: True
+  image_keys: "image_0,image_2,image_3"
+  image_transform_args:
+    image_stride: 16
+    max_image_size: 224
+    min_image_size: 224
+  vit_image_transform_args:
+    image_stride: 14
+    max_image_size: 224
+    min_image_size: 224
+  is_mandatory: true
+  shuffle_lines: True
+  shuffle_seed: 0
+  num_used_data:
+  - 16656
+  weight: 0.60
+
+
+## Text 2 Image (total weight 0.1)
+blip30_longcaption:
+  dataset_names:
+  - blip30_longcaption
+  image_transform_args:
+    image_stride: 16
+    max_image_size: 224
+    min_image_size: 224
+  shuffle_seed: 0
+  num_used_data:
+  - 16656
+  weight: 0.05
+
+blip30_journeyDb:
+  dataset_names:
+  - blip30_journeyDb
+  image_transform_args:
+    image_stride: 16
+    max_image_size: 224
+    min_image_size: 224
+  shuffle_seed: 0
+  num_used_data:
+  - 16656
+  weight: 0.025
+
+blip30_shortcaption:
+  dataset_names:
+  - blip30_shortcaption
+  image_transform_args:
+    image_stride: 16
+    max_image_size: 224
+    min_image_size: 224
+  shuffle_seed: 0
+  num_used_data:
+  - 16656
+  weight: 0.025
+
+
+## Text only (total weight 0.05)
+textonly:
+  dataset_names:
+  - tulu_3  # Set pi data name for tracking
+  n_log_examples: 10
+  image_transform_args:
+    image_stride: 16
+    max_image_size: 224
+    min_image_size: 224
+  vit_image_transform_args:
+    image_stride: 14
+    max_image_size: 224
+    min_image_size: 224
+  shuffle_lines: True
+  shuffle_seed: 0
+  num_used_data:
+  - 16656
+  weight: 0.05
+
+## image to text (total weight 0.15)
+blip30_longcaption_i2t:
+  dataset_names:
+  - blip30_longcaption_i2t
+  image_transform_args:
+    image_stride: 16
+    max_image_size: 224
+    min_image_size: 224
+  vit_image_transform_args:
+    image_stride: 14
+    max_image_size: 224
+    min_image_size: 224
+  shuffle_seed: 0
+  num_used_data:
+  - 16656
+  weight: 0.025
+
+cambrian_sft:
+  dataset_names:
+  - cambrian_sft
+  image_transform_args:
+    image_stride: 14
+    max_image_size: 224
+    min_image_size: 224
+  is_mandatory: true
+  shuffle_seed: 0
+  num_used_data:
+  - 1665600
+  weight: 0.125
+
