@@ -168,11 +168,11 @@ class TrainingArguments:
 
     # --- bookkeeping & logging ---
     exp_checkpoint_dir: str = field(
-        default="results",
+        default="/mnt/weka/checkpoints/liliyu/bagel_ckpt",
         metadata={"help": "Root directory for logs."}
     )
     checkpoint_dir: str = field(
-        default="results",
+        default="/mnt/weka/checkpoints/liliyu/bagel_ckpt",
         metadata={"help": "Root directory for model checkpoints."}
     )
     wandb_project: str = field(

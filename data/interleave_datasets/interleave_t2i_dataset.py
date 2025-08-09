@@ -152,7 +152,7 @@ class InterleavedBaseIterableDataset(DistributedIterableDataset):
         return data
 
     def save_example_image(self, condition_image, edited_image, edit_instruction, row_idx):
-        img_dir = os.path.join("results", self.experiment_name, f"{self.dataset_name}_examples")
+        img_dir = os.path.join("/mnt/weka/checkpoints/liliyu/bagel_ckpt", self.experiment_name, f"{self.dataset_name}_examples")
         os.makedirs(img_dir, exist_ok=True)
         condition_image = self.transform.resize_transform(condition_image)
         edited_image = self.transform.resize_transform(edited_image)
@@ -184,7 +184,7 @@ class InterleavedBaseIterableDataset(DistributedIterableDataset):
 
     def save_example_multi_image(self, condition_image_lists, edited_image_lists, edit_instruction, row_idx, image_key_list):
         
-        img_dir = os.path.join("results", self.experiment_name, f"{self.dataset_name}_examples")
+        img_dir = os.path.join("/mnt/weka/checkpoints/liliyu/bagel_ckpt", self.experiment_name, f"{self.dataset_name}_examples")
         os.makedirs(img_dir, exist_ok=True)
         with open(os.path.join(img_dir, f"example_{row_idx}_instruction.txt"), "w") as f:
             f.write(edit_instruction)

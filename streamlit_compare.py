@@ -242,7 +242,7 @@ def display_model_results(model_data, column, model_num):
         st.info(f"**Run:** {model_data.iloc[0]['run_name']}\n**Checkpoint:** {model_data.iloc[0]['checkpoint_steps']}")
         
         # Limit number of examples to display (once per model, not per task)
-        max_examples = st.sidebar.number_input(f"Max examples for Model {model_num}", min_value=1, max_value=20, value=10, key=f"max_ex_{model_num}")
+        max_examples = st.sidebar.number_input(f"Max examples for Model {model_num}", min_value=1, max_value=50, value=20, key=f"max_ex_{model_num}")
         
         # Group by task
         tasks = model_data['task'].unique()

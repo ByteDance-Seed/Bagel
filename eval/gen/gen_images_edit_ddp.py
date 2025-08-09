@@ -4,54 +4,33 @@
 import os
 import json
 import argparse
-from safetensors.torch import load_file
 import random
+import time
+from typing import Optional
+
 import numpy as np
 import torch
 import torch.distributed as dist
-from data.data_utils import add_special_tokens
-from modeling.bagel import (
-    BagelConfig, Bagel, Qwen2Config, Qwen2ForCausalLM, SiglipVisionConfig, SiglipVisionModel
-)
-from modeling.qwen2 import Qwen2Tokenizer
-from modeling.autoencoder import load_ae
-
-from PIL import Image
-from modeling.bagel.qwen2_navit import NaiveCache
-import os
-from copy import deepcopy
-from typing import (
-    Any,
-    AsyncIterable,
-    Callable,
-    Dict,
-    Generator,
-    List,
-    NamedTuple,
-    Optional,
-    Tuple,
-    Union,
-)
-import requests
-from io import BytesIO
-# from inferencer_ddp  import InterleaveInferencer
-from inferencer_video_ddp  import InterleaveInferencer
-
-from PIL import Image
-import torch
-from accelerate import infer_auto_device_map, load_checkpoint_and_dispatch, init_empty_weights
-
-from data.transforms import ImageTransform
-from data.data_utils import pil_img2rgb, add_special_tokens
-from modeling.bagel import (
-    BagelConfig, Bagel, Qwen2Config, Qwen2ForCausalLM, SiglipVisionConfig, SiglipVisionModel
-)
-from modeling.qwen2 import Qwen2Tokenizer
-from modeling.bagel.qwen2_navit import NaiveCache
-from modeling.autoencoder import load_ae
 from safetensors.torch import load_file
-import time
+from PIL import Image
 
+from data.data_utils import add_special_tokens
+from data.transforms import ImageTransform
+from modeling.bagel import (
+    BagelConfig, Bagel, Qwen2Config, Qwen2ForCausalLM, SiglipVisionConfig, SiglipVisionModel
+)
+from modeling.qwen2 import Qwen2Tokenizer
+from modeling.autoencoder import load_ae
+from inferencer_video_ddp import InterleaveInferencer
+
+
+def print_rank0(*args, **kwargs):
+    """Print only on rank 0 process."""
+    if dist.is_initialized():
+        if dist.get_rank() == 0:
+            print(*args, **kwargs)
+    else:
+        print(*args, **kwargs)
 
 
 def setup_distributed():
@@ -64,12 +43,30 @@ DATA_DIR = "/home/liliyu/workspace/monopi/monopi/experimental/liliyu/export_wm/"
 
 def setup_model(model_path, 
                 checkpoint_step: int=-1, 
-                run_name: str=None, 
+                run_name: Optional[str]=None, 
                 model_mode: str="raw", 
                 max_latent_size: int=64,
                 rank: int=0,
                 device: str="cuda:0",
                 ):
+    ################################################################
+    # try find the weight path
+    ########################################
+    if "fake" not in args.model_path:
+        if args.checkpoint_step == "-1":
+            weight_path = args.model_path
+        else:
+            weight_path = os.path.join(args.checkpoint_directory, args.run_name, "checkpoints", args.checkpoint_step)
+        if args.model_mode == "ema":
+            model_state_dict_path = os.path.join(weight_path, "ema.safetensors")
+        elif args.model_mode == "raw":
+            model_state_dict_path = os.path.join(weight_path, "model.safetensors")
+        else:
+            raise ValueError(f"Invalid model mode: {args.model_mode}")
+        if not os.path.exists(weight_path):
+            print_rank0(f"\n======= SKIPPING: Weight path does not exist: {weight_path} =======")
+            exit()
+        
     ################################################################    
     # Init model 
     ################################################################
@@ -106,24 +103,13 @@ def setup_model(model_path,
     ################################################################
     # Load model 
     ################################################################
-    if not "fake" in args.model_path:
-        if args.checkpoint_step == "-1":
-            weight_path = args.model_path
-        else:
-            weight_path = os.path.join("results", args.run_name, "checkpoints", args.checkpoint_step)
-        if args.model_mode == "ema":
-            model_state_dict_path = os.path.join(weight_path, "ema.safetensors")
-        elif args.model_mode == "raw":
-            model_state_dict_path = os.path.join(weight_path, "model.safetensors")
-        else:
-            raise ValueError(f"Invalid model mode: {args.model_mode}")
-        print(" ====== Loading model state dict from {} ====== ".format(model_state_dict_path))
-
+    if "fake" not in args.model_path:
+        print_rank0(f" ====== Loading model state dict from {model_state_dict_path} ====== ")
         model_state_dict = load_file(model_state_dict_path, device="cpu")
         msg = model.load_state_dict(model_state_dict, strict=False)
-        if rank == 0:
-            print(msg)
+        print_rank0(msg)
         del model_state_dict
+    print_rank0(" ====== Done loading, move model to devices ====== ")
 
     model = model.to(device).to(torch.bfloat16).eval()
     vae_model = vae_model.to(device).to(torch.bfloat16).eval()
@@ -166,11 +152,10 @@ if __name__ == "__main__":
     parser.add_argument('--cfg_text_scale', type=float, default=5.0)
     parser.add_argument('--cfg_img_scale', type=float, default=1.2)
     parser.add_argument('--num_timesteps', type=int, default=25)
+    parser.add_argument('--checkpoint_directory', type=str, default="/mnt/weka/checkpoints/liliyu/bagel_ckpt")
+
 
     args = parser.parse_args()
-    ################################    
-    # Init env 
-    ################################
     seed = 42
     set_seed(seed)
 
@@ -178,7 +163,51 @@ if __name__ == "__main__":
     rank = dist.get_rank()
     world_size = dist.get_world_size()
     device = f"cuda:{rank}"
-    
+
+    ################################################################
+    # Set up output directory
+    ################################################################
+    inference_hyper=dict(
+        cfg_text_scale=args.cfg_text_scale, # 4.0,
+        cfg_img_scale=args.cfg_img_scale, # 2.0,
+        cfg_interval=[0.0, 1.0],
+        timestep_shift=3.0, #3.0,
+        num_timesteps=args.num_timesteps,
+        cfg_renorm_min=0.0,
+        cfg_renorm_type="text_channel",
+        image_shapes=(args.resolution, args.resolution),
+    )
+
+    output_dir = os.path.join("/mnt/weka/checkpoints/liliyu/bagel_ckpt", args.run_name, "editing_eval", args.checkpoint_step)
+
+    gen_suffix = (f"renorm{inference_hyper['cfg_renorm_min']}_"
+                 f"text{inference_hyper['cfg_text_scale']}_"
+                 f"img{inference_hyper['cfg_img_scale']}_"
+                 f"shift{inference_hyper['timestep_shift']}_"
+                 f"timesteps{inference_hyper['num_timesteps']}_"
+                 f"res{inference_hyper['image_shapes'][0]}")
+
+
+    gen_suffix = f'prompt{args.ids_for_fixed_prompt}_{args.task_name}_{args.image_key}_{args.model_mode}_{gen_suffix}'
+    output_dir = os.path.join(output_dir,gen_suffix)
+    os.makedirs(output_dir, exist_ok=True)  
+    print_rank0(f"\n======= Output images are saved in {output_dir}  =======")
+
+    # Check if editing images have already been generated
+    subfolder_00019 = os.path.join(output_dir, "00019")
+    if os.path.exists(subfolder_00019):
+        png_files = [f for f in os.listdir(subfolder_00019) if f.endswith('.png')]
+        if png_files:
+            editing_image_generated = True
+            print_rank0(f" \n======= Editing images have already been generated in {output_dir}  =======")
+            exit()
+            
+    os.makedirs(output_dir, exist_ok=True)  
+
+
+    ################################    
+    # Init env 
+    ################################
     model, tokenizer, vae_model, gen_model, new_token_ids = setup_model(
         model_path=args.model_path, 
         checkpoint_step=args.checkpoint_step, 
@@ -206,36 +235,6 @@ if __name__ == "__main__":
         new_token_ids=new_token_ids
     )
 
-    inference_hyper=dict(
-        cfg_text_scale=args.cfg_text_scale, # 4.0,
-        cfg_img_scale=args.cfg_img_scale, # 2.0,
-        cfg_interval=[0.0, 1.0],
-        timestep_shift=3.0, #3.0,
-        num_timesteps=args.num_timesteps,
-        cfg_renorm_min=0.0,
-        cfg_renorm_type="text_channel",
-        image_shapes=(args.resolution, args.resolution),
-    )
-
-
-    ################################################################
-    # Set up output directory
-    ################################################################
-    output_dir = os.path.join("results", args.run_name, "editing_eval", args.checkpoint_step)
-
-    gen_suffix = (f"renorm{inference_hyper['cfg_renorm_min']}_"
-                 f"text{inference_hyper['cfg_text_scale']}_"
-                 f"img{inference_hyper['cfg_img_scale']}_"
-                 f"shift{inference_hyper['timestep_shift']}_"
-                 f"timesteps{inference_hyper['num_timesteps']}_"
-                 f"res{inference_hyper['image_shapes'][0]}")
-
-
-    gen_suffix = f'prompt{args.ids_for_fixed_prompt}_{args.task_name}_{args.image_key}_{args.model_mode}_{gen_suffix}'
-    output_dir = os.path.join(output_dir,gen_suffix)
-    os.makedirs(output_dir, exist_ok=True)  
-    if rank == 0:
-        print(f" ======= Output images are saved in {output_dir}  =======")
 
     ################################################################
     # Load metadata
@@ -249,7 +248,7 @@ if __name__ == "__main__":
     prompts_per_gpu = (total_metadatas + world_size - 1) // world_size
     start = rank * prompts_per_gpu
     end = min(start + prompts_per_gpu, total_metadatas)
-    print(f"GPU {rank}: Processing {end - start} prompts (indices {start} to {end - 1})")
+    print_rank0(f"GPU {rank}: Processing {end - start} prompts (indices {start} to {end - 1})")
     
     ################################################################
     # Distributed Inference
@@ -287,7 +286,7 @@ if __name__ == "__main__":
                 flag = False
                 break
         if flag:
-            print(f"GPU {rank} skipping generation for prompt: {prompt}")
+            print_rank0(f"GPU {rank} skipping generation for prompt: {prompt}")
             continue
         print(f"GPU {rank} processing prompt {idx - start + 1}/{end - start}: '{prompt}'")
 
@@ -303,7 +302,7 @@ if __name__ == "__main__":
         for sample in image_list:
             sample_count += 1
             # Crop the generated image
-            print(f"Sample shape: {sample.size}")
+            print_rank0(f"Sample shape: {sample.size}")
             sample = sample.crop(sample.getbbox())
             
             if sample.size[0] != inference_hyper['image_shapes'][0]:
@@ -324,12 +323,12 @@ if __name__ == "__main__":
     total_time = end_time - start_time
     num_prompts = end - start
     
-    print(f"\nGPU {rank} Summary:")
-    print(f"Total time: {total_time:.2f} seconds")
-    print(f"Average time per prompt: {total_time/num_prompts:.2f} seconds")
-    print(f"Number of prompts processed: {num_prompts}")
+    print_rank0(f"\nGPU {rank} Summary:")
+    print_rank0(f"Total time: {total_time:.2f} seconds")
+    print_rank0(f"Average time per prompt: {total_time/num_prompts:.2f} seconds")
+    print_rank0(f"Number of prompts processed: {num_prompts}")
 
-    print(f"GPU {rank} has completed all tasks, time cost: {time.time() - start_time} seconds")
+    print_rank0(f"GPU {rank} has completed all tasks, time cost: {time.time() - start_time} seconds")
     dist.barrier()
     
     ################################################################
@@ -355,7 +354,7 @@ if __name__ == "__main__":
 
 
         all_images =  os.listdir(output_dir)
-        print(f"found images  {all_images}")
+        print_rank0(f"found images  {all_images}")
         for img_dir in sorted(os.listdir(output_dir)):
             img_dir_path = os.path.join(output_dir, img_dir)
             if os.path.isdir(img_dir_path):
