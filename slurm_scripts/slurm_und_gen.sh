@@ -38,7 +38,6 @@ node_rank=$SLURM_NODEID
 master_addr=localhost
 master_port=29503
 model_path=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-7B-MoT
-# resume_from=/mnt/weka/checkpoints/liliyu/bagel_ckpt/seed_blip3o_all_robots_jul19_gpu64seq16384_pretrain/checkpoints/0008500
 resume_from=$model_path
 ckpt_dir=/mnt/weka/checkpoints/liliyu/bagel_ckpt/
 GPUS=8
