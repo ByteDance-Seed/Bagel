@@ -154,7 +154,7 @@ if __name__ == "__main__":
     parser.add_argument("--with_condition", type=bool, default=False)
     parser.add_argument('--wandb_project_name', type=str, default='bagel-edit-eval')
     parser.add_argument('--ids_for_fixed_prompt', type=int, default=-1)  #this is for fixed prompt, if -1, then use the prompt in the metadata
-    parser.add_argument('--cfg_text_scale', type=float, default=5.0)
+    parser.add_argument('--cfg_text_scale', type=float, default=4.0)
     parser.add_argument('--cfg_img_scale', type=float, default=1.2)
     parser.add_argument('--num_timesteps', type=int, default=25)
     parser.add_argument('--condition_on_vit', type=bool, default=False)

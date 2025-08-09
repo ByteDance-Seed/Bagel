@@ -27,19 +27,17 @@ exp_names=(
 )       
 ckpts=(0040000 0030000 0025000 0020000 0015000 0010000)
 
-exp_names=(
-    8_seed_all_robots_jul19_t1.0_gpu16_seq16384_shard8
-    4_seedp1_0.2_static_mobile_allview_endspan_nolast50_t1.0_gpu16_seq16384_shard8__PRE01_8.5k
-
-)       
-
+# exp_names=(
+#     8_seed_all_robots_jul19_t1.0_gpu16_seq16384_shard8
+#     4_seedp1_0.2_static_mobile_allview_endspan_nolast50_t1.0_gpu16_seq16384_shard8__PRE01_8.5k
+# )       
 # exp_names=(
 #     1_pi_arxs_ur5_allview_seq_seedp1_gpu16_seq16384
 #     2_pi_h1g1_allview_seq_seedp1_gpu16_seq16384
 #     3_pi_arxs_ur5b0b1_allview_endspan_nolast50_seedp1_gpu16_seq16384__RUN1_70k
 #     7_h1g1_vit_t1.0_gpu16_seq16384_shard8
 # )       
-ckpts=(0100000 0080000 0060000 0040000 0020000 0010000)
+# ckpts=(0100000 0080000 0060000 0040000 0020000 0010000)
 
 
 image_list_str="image_0,image_2,image_3"

@@ -62,10 +62,10 @@ num_replicate=$((total_gpus/num_shard))
 
 timestep_shift=1.0
 
-# Basic NCCL diagnostics & async error handling
-export NCCL_DEBUG=INFO            # or WARN in production
-export NCCL_DEBUG_SUBSYS=ALL      # prints collectives, topo, p2p (optional)
-export NCCL_ASYNC_ERROR_HANDLING=1
+# # Basic NCCL diagnostics & async error handling
+# export NCCL_DEBUG=INFO            # or WARN in production
+# export NCCL_DEBUG_SUBSYS=ALL      # prints collectives, topo, p2p (optional)
+# export NCCL_ASYNC_ERROR_HANDLING=1
 
 # Fine-tuning
 srun -l torchrun --nnodes=$num_nodes --nproc_per_node=$GPUS \
