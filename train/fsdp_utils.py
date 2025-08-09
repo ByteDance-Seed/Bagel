@@ -100,6 +100,7 @@ class FSDPCheckpoint:
     ):
         save_path = os.path.join(ckpt_dir, f"{train_steps:07d}")
         os.makedirs(save_path, exist_ok=True)
+        os.makedirs(f"{save_path}_optimizer", exist_ok=True)
         logger.info(f"Saving checkpoint to {save_path}.")
 
         if ema_model is not None:

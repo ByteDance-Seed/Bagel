@@ -2,14 +2,14 @@
 #SBATCH --cpus-per-task=11
 #SBATCH --error=/mnt/weka/slurm_logs/liliyu/img_edit_train/%j_%a_log.err
 #SBATCH --gres=gpu:8
-#SBATCH --nodes=1
+#SBATCH --nodes=2
 #SBATCH --ntasks-per-node=1
 #SBATCH --open-mode=append
 #SBATCH --output=/mnt/weka/slurm_logs/liliyu/img_edit_train/%j_%a_log.out
 #SBATCH --signal=USR2@90
 #SBATCH --wckey=submitit
 #SBATCH --job-name=bagel
-#SBATCH --qos=hl
+#SBATCH --qos=tmp_wm
 
 # Check if config name is provided
 if [ $# -eq 0 ]; then
@@ -46,7 +46,8 @@ ckpt_dir=/mnt/weka/checkpoints/liliyu/bagel_ckpt/
 GPUS=8
 
 batch_size=1
-expected_num_tokens=32768
+# expected_num_tokens=32768   
+expected_num_tokens=16384   
 max_num_tokens=$((expected_num_tokens+2048))
 max_num_tokens_per_sample=$((expected_num_tokens/2))
 prefer_buffer_before=$((expected_num_tokens/2))
@@ -91,10 +92,9 @@ srun -l torchrun --nnodes=$num_nodes --nproc_per_node=$GPUS \
   --dataset_config_file data/configs/${config_name}.yaml  \
   --exp_name ${config_name}_t${timestep_shift}_gpu${total_gpus}_seq${expected_num_tokens}_shard${num_shard} \
   --wandb_runid 0 \
-  --wandb_project octoplus \
   --num_shard $num_shard \
   --num_replicate $num_replicate \
   --use_flex True \
-  --visual_und False \
   --ema 0.995 \
-  --save_every 1000
+  --save_every 1000 \
+  --visual_und False 

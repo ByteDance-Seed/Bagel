@@ -57,15 +57,14 @@ num_shard=8
 num_replicate=$((total_gpus/num_shard))
 timestep_shift=1.0
 
-# Basic NCCL diagnostics & async error handling
-export NCCL_DEBUG=INFO            # or WARN in production
-export NCCL_DEBUG_SUBSYS=ALL      # prints collectives, topo, p2p (optional)
-export NCCL_ASYNC_ERROR_HANDLING=1
+# # Basic NCCL diagnostics & async error handling
+# export NCCL_DEBUG=INFO            # or WARN in production
+# export NCCL_DEBUG_SUBSYS=ALL      # prints collectives, topo, p2p (optional)
+# export NCCL_ASYNC_ERROR_HANDLING=1
 
-#   --finetune-from-ema True \  #Turn it off when resuming from a pi trained checkpoint
 # Fine-tuning
-srun -l torchrun --nnodes=$num_nodes --node_rank=$SLURM_NODEID --nproc_per_node=$GPUS \
-    --rdzv_id=$SLURM_JOB_ID --rdzv_backend=c10d --rdzv_endpoint=$HOSTNAME:$master_port  --log-dir /mnt/weka/slurm_logs/liliyu/img_edit_train/%j_%N_rank_%t/ --redirect 3 train/pretrain_unified_navit.py \
+srun -l torchrun --nnodes=$num_nodes --nproc_per_node=$GPUS \
+    --rdzv_id=$SLURM_JOB_ID --rdzv_backend=c10d --rdzv_endpoint=$HOSTNAME:$master_port --log-dir /mnt/weka/slurm_logs/liliyu/img_edit_train/%j_%N_rank_%t/ --redirect 3   train/pretrain_unified_navit.py \
   --layer_module Qwen2MoTDecoderLayer \
   --model_path $model_path \
   --resume-from $resume_from \
