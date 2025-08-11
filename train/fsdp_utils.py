@@ -106,16 +106,15 @@ class FSDPCheckpoint:
         if ema_model is not None:
             with FSDP.state_dict_type(
                 ema_model,
-                StateDictType.SHARDED_STATE_DICT, #StateDictType.FULL_STATE_DICT,
-                ShardedStateDictConfig(offload_to_cpu=True), #FullStateDictConfig(rank0_only=True, offload_to_cpu=True),
+                StateDictType.FULL_STATE_DICT,
+                FullStateDictConfig(rank0_only=True, offload_to_cpu=True),
             ):
                 torch.cuda.empty_cache()          # right before state_dict()
                 ema_state_dict = ema_model.state_dict()
                 if save_bf16:
                     ema_state_dict = {k: v.to(torch.bfloat16) if v.dtype == torch.float32 else v for k, v in ema_state_dict.items()}
-                # if dist.get_rank() == 0:
-                    # save_file(ema_state_dict, os.path.join(save_path, "ema.safetensors"))
-                torch.save(ema_state_dict, os.path.join(save_path, f"ema_rank{dist.get_rank():05d}.pt"))
+                if dist.get_rank() == 0:
+                    save_file(ema_state_dict, os.path.join(save_path, "ema.safetensors"))
 
         with FSDP.state_dict_type(
             model,

@@ -36,7 +36,7 @@ task_names=(
     g1h1_drawer_rollout
     # g1h1_drawer_ood_rollout
 )
-condition_on_vit=false
+use_vit_as_condition=false
 
 
 for ckpt in "${ckpts[@]}"; do

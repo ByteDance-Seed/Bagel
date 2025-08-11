@@ -29,7 +29,7 @@ task_names=(
     # g1h1_drawer_ood_rollout
 )
 ckpts=(0040000 0020000 0010000)
-condition_on_vit=false
+use_vit_as_condition=false
 
 
 for ckpt in "${ckpts[@]}"; do
@@ -53,4 +53,4 @@ for ckpt in "${ckpts[@]}"; do
             # --with_condition $with_condition
     done
 done
-            # --condition_on_vit false \
+            # --use_vit_as_condition false \

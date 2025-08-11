@@ -126,17 +126,6 @@ class InterleaveInferencer:
         #     new_token_ids=self.new_token_ids,
         # )
         ## update vae
-        if vit:
-            generation_input, kv_lens, ropes = self.model.prepare_vit_videos(
-                curr_kvlens=kv_lens,
-                curr_rope=ropes, 
-                videos=[images],
-                transforms=self.vae_transform, 
-                new_token_ids=self.new_token_ids,
-            )
-            generation_input = move_generation_input_to_device(generation_input, device)
-            past_key_values = self.model.forward_cache_update_vit(past_key_values, **generation_input)
-
         if vae:
             generation_input, kv_lens, ropes = self.model.prepare_vae_videos(
                 curr_kvlens=kv_lens,
@@ -147,6 +136,18 @@ class InterleaveInferencer:
             )
             generation_input = move_generation_input_to_device(generation_input, device)
             past_key_values = self.model.forward_cache_update_vae(self.vae_model, past_key_values, **generation_input)
+
+        if vit:
+            print("adding vit as the condition")
+            generation_input, kv_lens, ropes = self.model.prepare_vit_videos(
+                curr_kvlens=kv_lens,
+                curr_rope=ropes, 
+                videos=[images],
+                transforms=self.vae_transform, 
+                new_token_ids=self.new_token_ids,
+            )
+            generation_input = move_generation_input_to_device(generation_input, device)
+            past_key_values = self.model.forward_cache_update_vit(past_key_values, **generation_input)
 
         gen_context['kv_lens'] = kv_lens
         gen_context['ropes'] = ropes
@@ -413,7 +414,8 @@ class InterleaveInferencer:
         cfg_renorm_type="global",
         image_shapes=(1024, 1024),
         using_2nd_order=False,
-        condition_on_vit=False,
+        use_vit_as_condition=False,
+        add_vit_as_condition=False,
     ) -> List[Union[str, Image.Image]]:
         
         print('in multiview_image_editing', num_timesteps)
@@ -436,8 +438,8 @@ class InterleaveInferencer:
                     input_term = self.vae_transform.resize_transform(pil_img2rgb(image))
                     images.append(input_term)
                     image_shapes.append(input_term.size[::-1])
-            gen_context = self.update_context_video(images, gen_context,vae=not condition_on_vit, vit=condition_on_vit, device=device)
-            cfg_text_context = self.update_context_video(images, init_context,vae=not condition_on_vit, vit=condition_on_vit, device=device)
+            gen_context = self.update_context_video(images, gen_context,vae=not use_vit_as_condition, vit=use_vit_as_condition or add_vit_as_condition, device=device)
+            cfg_text_context = self.update_context_video(images, init_context,vae=not use_vit_as_condition, vit=use_vit_as_condition or add_vit_as_condition, device=device)
 
             # then do for text
             cfg_text_context = deepcopy(gen_context)

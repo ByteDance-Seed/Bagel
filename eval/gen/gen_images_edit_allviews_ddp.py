@@ -151,13 +151,14 @@ if __name__ == "__main__":
     parser.add_argument('--checkpoint_step', type=str, default='-1')
     parser.add_argument('--run_name', type=str, default='SEED_part23_run0')
     parser.add_argument('--model_mode', type=str, default='ema')
-    parser.add_argument("--with_condition", type=bool, default=False)
+    parser.add_argument("--with_condition", action='store_true', help="Enable condition (default: False)")
     parser.add_argument('--wandb_project_name', type=str, default='bagel-edit-eval')
     parser.add_argument('--ids_for_fixed_prompt', type=int, default=-1)  #this is for fixed prompt, if -1, then use the prompt in the metadata
     parser.add_argument('--cfg_text_scale', type=float, default=4.0)
     parser.add_argument('--cfg_img_scale', type=float, default=1.2)
     parser.add_argument('--num_timesteps', type=int, default=25)
-    parser.add_argument('--condition_on_vit', type=bool, default=False)
+    parser.add_argument('--use_vit_as_condition', action='store_true', help="Use ViT as condition (default: False)")
+    parser.add_argument('--add_vit_as_condition', action='store_true', help="Add ViT as condition (default: False)")
     parser.add_argument('--checkpoint_directory', type=str, default="/mnt/weka/checkpoints/liliyu/bagel_ckpt")
     args = parser.parse_args()
 
@@ -293,7 +294,7 @@ if __name__ == "__main__":
                     target_image_paths.append(target_image_path)
                 else:
                     target_image_paths.append(None)
-        image_list = inferencer.multiview_image_editing(source_images, prompt, device=device, condition_on_vit=args.condition_on_vit, **inference_hyper )
+        image_list = inferencer.multiview_image_editing(source_images, prompt, device=device, use_vit_as_condition=args.use_vit_as_condition, add_vit_as_condition=args.add_vit_as_condition, **inference_hyper )
 
         sample_count = 0
         for i, (sample, source_image, target_image) in enumerate(zip(image_list, source_image_paths, target_image_paths)):
