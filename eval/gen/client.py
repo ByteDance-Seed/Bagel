@@ -53,9 +53,9 @@ async def connect_and_send(args):
             source_image_path_2 = "/mnt/weka/artifacts/lucy/export_wm/shirt_folding_150steps_vfilter/all_views/images/71_source_image_2.png"
             source_image_path_3 = "/mnt/weka/artifacts/lucy/export_wm/shirt_folding_150steps_vfilter/all_views/images/71_source_image_3.png"
 
-            # source_image_path = "/home/liliyu/workspace/monopi/monopi/experimental/liliyu/export_wm/ur5e4_endspan_lang_1/all_views/images/8_source_image_0.png"
-            # source_image_path_2 = "/home/liliyu/workspace/monopi/monopi/experimental/liliyu/export_wm/ur5e4_endspan_lang_1/all_views/images/8_source_image_2.png"
-            # source_image_path_3 = "/home/liliyu/workspace/monopi/monopi/experimental/liliyu/export_wm/ur5e4_endspan_lang_1/all_views/images/8_source_image_2.png"
+            # source_image_path = "/mnt/weka/liliyu/export_wm/ur5e4_endspan_lang_1/all_views/images/8_source_image_0.png"
+            # source_image_path_2 = "/mnt/weka/liliyu/export_wm/ur5e4_endspan_lang_1/all_views/images/8_source_image_2.png"
+            # source_image_path_3 = "/mnt/weka/liliyu/export_wm/ur5e4_endspan_lang_1/all_views/images/8_source_image_2.png"
 
             for i, editing_instruction in enumerate(editing_command):
                 source_image = np.array(Image.open(source_image_path).resize((224, 224)))

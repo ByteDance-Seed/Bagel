@@ -5,7 +5,7 @@ set -x
 
 # model_path=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-small-fake
 model_path=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-7B-MoT
-# DATA_DIR = "/home/liliyu/workspace/monopi/monopi/experimental/liliyu/export_wm/"
+# DATA_DIR = "/mnt/weka/liliyu/export_wm/"
 
 GPUS=8
 image_key=all_views

@@ -39,7 +39,7 @@ def setup_distributed():
     torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
 
 
-DATA_DIR = "/home/liliyu/workspace/monopi/monopi/experimental/liliyu/export_wm/"
+DATA_DIR = "/mnt/weka/liliyu/export_wm/"
 
 
 def setup_model(model_path, 
@@ -138,7 +138,7 @@ def set_seed(seed):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate images using Bagel model.")
-    # parser.add_argument("--metadata_file", type=str, default="/home/liliyu/workspace/monopi/monopi/experimental/liliyu/export_wm/arx_leftarm/image_0/prompts.jsonl", help="JSONL file containing lines of metadata for each prompt.")
+    # parser.add_argument("--metadata_file", type=str, default="/mnt/weka/liliyu/export_wm/arx_leftarm/image_0/prompts.jsonl", help="JSONL file containing lines of metadata for each prompt.")
     parser.add_argument("--task_name", type=str, default="arx_step100")
     parser.add_argument("--image_key", type=str, default="all_views")
     parser.add_argument("--image_list_str", type=str, default="image_0,image_2")

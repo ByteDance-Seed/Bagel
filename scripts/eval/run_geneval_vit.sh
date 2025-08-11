@@ -5,7 +5,7 @@ set -x
 
 # model_path=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-small-fake
 model_path=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-7B-MoT
-# DATA_DIR = "/home/liliyu/workspace/monopi/monopi/experimental/liliyu/export_wm/"
+# DATA_DIR = "/mnt/weka/liliyu/export_wm/"
 
 GPUS=8
 image_key=all_views
@@ -49,11 +49,11 @@ task_names=(
 ckpts=(0020000 0010000) # 0015000)
 # ckpts=(0015000)#
 exp_names=(
-    # 9_seed_blip3o_all_75sampling_pickle_t1.0_gpu16_seq16384_shard8
-    10_seed_blip3o_all_75sampling_with_vit_pickle_t1.0_gpu16_seq16384_shard8
-    11_seed_blip3o_all_75sampling_with_vit_textloss_pickle_t1.0_gpu16_seq16384_shard8
+    9_seed_blip3o_all_75sampling_pickle_t1.0_gpu16_seq16384_shard8
+    # 10_seed_blip3o_all_75sampling_with_vit_pickle_t1.0_gpu16_seq16384_shard8
+    # 11_seed_blip3o_all_75sampling_with_vit_textloss_pickle_t1.0_gpu16_seq16384_shard8
 )       
-add_vit_as_condition=true
+# add_vit_as_condition=true
 
 for ckpt in "${ckpts[@]}"; do
     for task_name in "${task_names[@]}"; do
