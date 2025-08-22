@@ -24,7 +24,7 @@ We offer examples in both raw-image folder and parquet shard formats. For other 
        ├── images/                    # JPEG / PNG frames
        └── llava_ov_si.jsonl          # vision‑language SFT conversations
    ```
-3. Edit every `your_data_path` placeholder in **`data/dataset_info.py`**.
+3. Edit every `your_data_path` placeholder in **`data/dataset_info.py`** and in **`bagel_example/editing/parquet_info/seedxedit_multi.json`** in the data directory.
 4. *(Optional)*  Extend `DATASET_INFO` with your own parquet shards or JSONL files to mix extra data.
 
 ---
@@ -159,6 +159,7 @@ You are encouraged to adjust any of these hyperparameters to fit your GPU budget
 | ---------------- | --------------------- | ---------------------------------------------------- |
 | `results_dir`    | `results`             | Root directory for logs and metrics.                 |
 | `checkpoint_dir` | `results/checkpoints` | Checkpoints are saved here.                          |
+| `save_dtype`     | `None`                | Data type for saving model checkpoints.              |
 | `log_every`      | `10`                  | Steps between console / W\&B logs.                   |
 | `wandb_project`  | `bagel`               | Weights & Biases project name.                       |
 | `wandb_name`     | `run`                 | Run name inside the project.                         |

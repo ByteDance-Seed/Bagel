@@ -5,6 +5,7 @@ import functools
 import os
 
 import torch
+import torch.nn as nn
 import torch.distributed as dist
 import torch.distributed.fsdp._traversal_utils as traversal_utils
 from torch.distributed.device_mesh import init_device_mesh
@@ -45,7 +46,7 @@ class FSDPConfig:
         self.num_shard = num_shard
 
 
-def fsdp_wrapper(original_model, fsdp_config, ignored_modules=[]):
+def fsdp_wrapper(original_model, fsdp_config, training_args, ignored_modules=[]):
     if fsdp_config.sharding_strategy == 'HYBRID_SHARD':
         device_mesh = init_device_mesh(
             "cuda", 
@@ -80,6 +81,7 @@ def fsdp_wrapper(original_model, fsdp_config, ignored_modules=[]):
         backward_prefetch=BackwardPrefetch[fsdp_config.backward_prefetch],
         cpu_offload=CPUOffload(offload_params=fsdp_config.cpu_offload),
         device_mesh=device_mesh,
+        use_orig_params=True if training_args.freeze_llm or training_args.freeze_vit or training_args.freeze_und else False,
     )
 
 
@@ -95,6 +97,7 @@ class FSDPCheckpoint:
         data_status,
         logger, 
         fsdp_config,
+        save_dtype=None,
     ):
         save_path = os.path.join(ckpt_dir, f"{train_steps:07d}")
         os.makedirs(save_path, exist_ok=True)
@@ -107,6 +110,8 @@ class FSDPCheckpoint:
                 FullStateDictConfig(rank0_only=True, offload_to_cpu=True),
             ):
                 ema_state_dict = ema_model.state_dict()
+                if save_dtype is not None:
+                    ema_state_dict = {k: v.to(dtype=save_dtype) for k, v in ema_state_dict.items()}
                 if dist.get_rank() == 0:
                     save_file(ema_state_dict, os.path.join(save_path, "ema.safetensors"))
 
@@ -116,6 +121,8 @@ class FSDPCheckpoint:
             FullStateDictConfig(rank0_only=True, offload_to_cpu=True),
         ):
             model_state_dict = model.state_dict()
+            if save_dtype is not None:
+                model_state_dict = {k: v.to(dtype=save_dtype) for k, v in model_state_dict.items()}
             if dist.get_rank() == 0:
                 save_file(model_state_dict, os.path.join(save_path, "model.safetensors"))
 
@@ -244,11 +251,11 @@ def grad_checkpoint_check_fn(module):
     return isinstance(module, module_options)
 
 
-def fsdp_ema_setup(ema_model, fsdp_config, ignored_modules=[]):
+def fsdp_ema_setup(ema_model, fsdp_config, training_args, ignored_modules=[]):
     for param in ema_model.parameters():
         param.requires_grad = False
 
-    ema_model = fsdp_wrapper(ema_model, fsdp_config, ignored_modules=ignored_modules)
+    ema_model = fsdp_wrapper(ema_model, fsdp_config, training_args, ignored_modules=ignored_modules)
     return ema_model
 
 

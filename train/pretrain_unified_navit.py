@@ -171,6 +171,10 @@ class TrainingArguments:
         default="results/checkpoints",
         metadata={"help": "Root directory for model checkpoints."}
     )
+    save_dtype: str = field(
+        default=None,
+        metadata={"help": "Data type to save the model in. Should be set as one of the torch dtype names, e.g., 'bfloat16', 'float16', 'float32', etc. If None, use the same dtype as the model."}
+    )
     wandb_project: str = field(
         default="bagel",
         metadata={"help": "Weights & Biases project name."}
@@ -483,8 +487,8 @@ def main():
     model, ema_model = FSDPCheckpoint.try_load_ckpt(
         resume_from, logger, model, ema_model, resume_from_ema=finetune_from_ema
     )
-    ema_model = fsdp_ema_setup(ema_model, fsdp_config)
-    fsdp_model = fsdp_wrapper(model, fsdp_config)
+    ema_model = fsdp_ema_setup(ema_model, fsdp_config, training_args)
+    fsdp_model = fsdp_wrapper(model, fsdp_config, training_args)
     apply_activation_checkpointing(
         fsdp_model, 
         checkpoint_wrapper_fn=functools.partial(
@@ -672,13 +676,14 @@ def main():
                 data_status[item['dataset_name']] = {}
             data_status[item['dataset_name']][item['worker_id']] = item['data_indexes']
 
-        if curr_step > 0 and curr_step % training_args.save_every == 0:
+        if (curr_step > 0 and curr_step % training_args.save_every == 0) or curr_step == training_args.total_steps - 1:
             if dist.get_rank() == 0:
                 gather_list = [None] * dist.get_world_size()
             else:
                 gather_list = None
             dist.gather_object(data_status, gather_list, dst=0)
 
+            save_dtype = getattr(torch, training_args.save_dtype) if training_args.save_dtype is not None else None
             FSDPCheckpoint.fsdp_save_ckpt(
                 ckpt_dir=training_args.checkpoint_dir, 
                 train_steps=curr_step, 
@@ -688,8 +693,12 @@ def main():
                 scheduler=scheduler, 
                 logger=logger,
                 fsdp_config=fsdp_config,
-                data_status=gather_list
+                data_status=gather_list,
+                save_dtype=save_dtype,
             )
+        
+        if curr_step == training_args.total_steps - 1:
+            break
 
     logger.info("Done!")
     if dist.get_rank() == 0:
