@@ -28,31 +28,40 @@ wandb_project_name=bagel-edit-eval
 # ckpts=(0040000 0030000 0025000 0020000 0015000 0010000)
 # ckpts=(0020000)
 
-exp_names=(
-    # 8_seed_all_robots_jul19_t1.0_gpu16_seq16384_shard8
-    4_seedp1_0.2_static_mobile_allview_endspan_nolast50_t1.0_gpu16_seq16384_shard8__PRE01_8.5k
-)       
 # exp_names=(
-#     1_pi_arxs_ur5_allview_seq_seedp1_gpu16_seq16384
-#     2_pi_h1g1_allview_seq_seedp1_gpu16_seq16384
-#     3_pi_arxs_ur5b0b1_allview_endspan_nolast50_seedp1_gpu16_seq16384__RUN1_70k
-#     7_h1g1_vit_t1.0_gpu16_seq16384_shard8
+#     # 8_seed_all_robots_jul19_t1.0_gpu16_seq16384_shard8
+#     4_seedp1_0.2_static_mobile_allview_endspan_nolast50_t1.0_gpu16_seq16384_shard8__PRE01_8.5k
 # )       
+exp_names=(
+    9_seed_blip3o_all_75sampling_pickle_t1.0_gpu16_seq16384_shard8
+    8_seed_all_robots_jul19_t1.0_gpu16_seq16384_shard8
+    4_seedp1_0.2_static_mobile_allview_endspan_nolast50_t1.0_gpu16_seq16384_shard8__PRE01_8.5k
+    1_pi_arxs_ur5_allview_seq_seedp1_gpu16_seq16384
+    2_pi_h1g1_allview_seq_seedp1_gpu16_seq16384
+    3_pi_arxs_ur5b0b1_allview_endspan_nolast50_seedp1_gpu16_seq16384__RUN1_70k
+    7_h1g1_vit_t1.0_gpu16_seq16384_shard8
+)       
 ckpts=(0100000 0080000 0060000 0040000 0020000 0010000)
 ckpts=(0100000 0060000)
 
-
+ckpts=(0060000 0040000 0020000 0010000) # 0015000)
+exp_names=(9_seed_blip3o_all_75sampling_pickle_t1.0_gpu16_seq16384_shard8)
 image_list_str="image_0,image_2,image_3"
 task_names=(
     arx_biarm_bussing_rollout
     arx_biarm_organize_desk_rollout
-    # arx_biarm_organize_desk_disorganize_rollout
-    # Add messy kitche ur5_biarm ??
     h1g1_dishes_in_sink_rollout
     h1g1_make_the_bed_rollout
     g1h1_drawer_rollout
     # g1h1_drawer_ood_rollout
 )
+# task_names=(
+#     detailed_arx_biarm
+#     detailed_ur5
+#     detailed_g1
+#     detailed_h1
+# )
+ckpts=(0180000 0160000 0140000 0120000 0100000 0080000) # 0015000)
 use_vit_as_condition=false
 
 

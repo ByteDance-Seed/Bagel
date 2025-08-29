@@ -46,12 +46,12 @@ task_names=(
     g1h1_drawer_rollout
     # g1h1_drawer_ood_rollout
 )
-ckpts=(0020000 0010000) # 0015000)
+ckpts=(0180000 0160000 0140000 0120000 0100000 0080000) # 0015000)
 # ckpts=(0015000)#
 exp_names=(
-    9_seed_blip3o_all_75sampling_pickle_t1.0_gpu16_seq16384_shard8
-    # 10_seed_blip3o_all_75sampling_with_vit_pickle_t1.0_gpu16_seq16384_shard8
-    # 11_seed_blip3o_all_75sampling_with_vit_textloss_pickle_t1.0_gpu16_seq16384_shard8
+    # 9_seed_blip3o_all_75sampling_pickle_t1.0_gpu16_seq16384_shard8
+    10_seed_blip3o_all_75sampling_with_vit_pickle_t1.0_gpu16_seq16384_shard8
+    11_seed_blip3o_all_75sampling_with_vit_textloss_pickle_t1.0_gpu16_seq16384_shard8
 )       
 # add_vit_as_condition=true
 

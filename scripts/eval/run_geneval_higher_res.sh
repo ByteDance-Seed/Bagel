@@ -20,11 +20,11 @@ exp_names=(
 exp_names=(
     pre09_seed_blip3o_robot_448px_t1.0_gpu16_seq32768_shard8__PRE02_16k
 )   
-resolution=448
 ckpts=(0030000 0025000 0020000 0015000 0010000)
+exp_names=(pre10_seed_blip3o_robot_448px__PRE06_20k_t1.0_gpu16_seq32768_shard8) 
+ckpts=(0100000 0080000 0060000 0040000 0020000)
 
-
-
+resolution=448
 image_list_str="image_0,image_2,image_3"
 task_names=(
     arx_biarm_bussing_rollout
@@ -35,6 +35,10 @@ task_names=(
     h1g1_make_the_bed_rollout
     g1h1_drawer_rollout
     # g1h1_drawer_ood_rollout
+    detailed_arx_biarm
+    detailed_ur5
+    detailed_g1
+    detailed_h1
 )
 use_vit_as_condition=false
 

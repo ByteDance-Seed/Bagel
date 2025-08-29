@@ -42,33 +42,10 @@ def setup_distributed():
 DATA_DIR = "/mnt/weka/liliyu/export_wm/"
 
 
-def setup_model(model_path, 
-                checkpoint_step: int=-1, 
-                run_name: Optional[str]=None, 
-                model_mode: str="raw", 
-                max_latent_size: int=64,
-                rank: int=0,
+def setup_model(args, 
+                model_state_dict_path,
                 device: str="cuda:0",
                 ):
-    ################################################################
-    # try find the weight path
-    ################################################################
-    if "fake" not in args.model_path:
-        if args.checkpoint_step == "-1":
-            weight_path = args.model_path
-        else:
-            weight_path = os.path.join(args.checkpoint_directory, args.run_name, "checkpoints", args.checkpoint_step)
-        if args.model_mode == "ema":
-            model_state_dict_path = os.path.join(weight_path, "ema.safetensors")
-        elif args.model_mode == "raw":
-            model_state_dict_path = os.path.join(weight_path, "model.safetensors")
-        else:
-            raise ValueError(f"Invalid model mode: {args.model_mode}")
-        if not os.path.exists(weight_path):
-            print_rank0(f"\n======= SKIPPING: Weight path does not exist: {weight_path} =======")
-            exit()
-
-
     ################################################################    
     # Init model 
     ################################################################
@@ -173,6 +150,24 @@ if __name__ == "__main__":
     print_rank0(args)
 
     ################################################################
+    # try find the weight path
+    ################################################################
+    if "fake" not in args.model_path:
+        if args.checkpoint_step == "-1":
+            weight_path = args.model_path
+        else:
+            weight_path = os.path.join(args.checkpoint_directory, args.run_name, "checkpoints", args.checkpoint_step)
+        if args.model_mode == "ema":
+            model_state_dict_path = os.path.join(weight_path, "ema.safetensors")
+        elif args.model_mode == "raw":
+            model_state_dict_path = os.path.join(weight_path, "model.safetensors")
+        else:
+            raise ValueError(f"Invalid model mode: {args.model_mode}")
+        if not os.path.exists(weight_path):
+            print_rank0(f"\n======= SKIPPING: Weight path does not exist: {weight_path} =======")
+            exit()
+
+    ################################################################
     # Set up output directory
     ################################################################
     inference_hyper=dict(
@@ -222,11 +217,8 @@ if __name__ == "__main__":
     ################################
 
     model, tokenizer, vae_model, gen_model, new_token_ids = setup_model(
-        model_path=args.model_path, 
-        checkpoint_step=args.checkpoint_step, 
-        run_name=args.run_name, 
-        model_mode=args.model_mode, 
-        max_latent_size=args.max_latent_size,
+        args=args,
+        model_state_dict_path=model_state_dict_path,
         device=device,
     )
 

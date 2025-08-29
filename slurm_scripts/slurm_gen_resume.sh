@@ -40,7 +40,7 @@ node_rank=$SLURM_NODEID
 master_addr=localhost
 master_port=29503
 model_path=/home/liliyu/workspace/BAGEL/pretrained_models/BAGEL-7B-MoT
-resume_from=/mnt/weka/checkpoints/liliyu/bagel_ckpt/pre04_seed_blip3o_all_robots_w_notext_pickle_t1.0_gpu32_seq32768_shard8_pretrain/checkpoints/0015000
+resume_from=/mnt/weka/checkpoints/liliyu/bagel_ckpt/pre06_seed_blip3o_all_50sampling_pickle_jul29_t1.0_gpu32_seq32768_shard8__PRE04_17k/checkpoints/0020000
 
 echo " ====== resume_from: $resume_from"
 
