@@ -388,3 +388,90 @@ action: 4.38
 overall: 3.28
 </pre>
 </details>
+
+# UnicBench
+We modify the code in [UnicBench](https://github.com/WeChatCV/UnicBench) for faster evaluation.
+
+## Data preparation
+Please download the benchmark data from [UnicBench](https://huggingface.co/datasets/xiaotanhua/UnicBench) and and place it in the `data` directory.
+
+You can easily load UnicBench using the `datasets` library:
+```python
+from datasets import load_dataset
+
+# Load the dataset
+ds = load_dataset("xiaotanhua/UnicBench")
+
+# View dataset structure
+print(ds)
+# DatasetDict({
+#     train: Dataset({
+#         features: ['key', 'task', 'subtask', 'cn', 'en', 'image', 'resolution', 'reasoning_points'],
+#         num_rows: 1100
+#     })
+# })
+
+# Access a sample
+sample = ds['train'][0]
+print(sample)
+```
+
+## Evaluation
+Directly run `scripts/eval/run_unicbench.sh` to evaluate UnicBench. The output will be saved in `$output_path`.
+- Set `$model_path` and `$output_path` for the path for checkpoint and log.
+- Set `$openai_api_key` in `scripts/eval/run_unicbench.sh`. The default GPT version is `gpt-4.1-2025-04-14`.
+- We set `cfg_text_scale=4` and `cfg_img_scale=1.5` by default. Additionally, `cfg_renorm_min=0` is specified for CFG Renorm.
+
+<details>
+<summary><b>Results (EN)</b></summary>
+<pre>
+Attribute Editing:
+  IF: 7.5440
+  NC: 8.8120
+  VQ: 7.3400
+  Overall: 7.3184
+Object Editing:
+  IF: 6.6343
+  NC: 7.9771
+  VQ: 7.0800
+  Overall: 6.6784
+Scene Editing:
+  IF: 8.9200
+  NC: 8.2400
+  VQ: 7.5960
+  Overall: 8.1083
+Reasoning Editing:
+  IF: 6.1440
+  NC: 7.8520
+  VQ: 6.5640
+  RA: 5.2600
+  Overall: 5.9326
+</pre>
+</details>
+
+<details>
+<summary><b>Results (CN)</b></summary>
+<pre>
+Attribute Editing:
+  IF: 7.5560
+  NC: 8.8120
+  VQ: 7.5080
+  Overall: 7.4498
+Object Editing:
+  IF: 6.7114
+  NC: 8.1829
+  VQ: 7.3029
+  Overall: 6.9385
+Scene Editing:
+  IF: 9.0360
+  NC: 8.2000
+  VQ: 7.6880
+  Overall: 8.1469
+Reasoning Editing:
+  IF: 6.1400
+  NC: 7.9840
+  VQ: 6.7520
+  RA: 5.2840
+  Overall: 5.9540
+</pre>
+</details>
