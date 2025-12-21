@@ -16,7 +16,7 @@ from datasets import load_dataset
 import torch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from data import prompts
+import prompts
 
 
 # ===================== utils =====================
