@@ -55,7 +55,7 @@ class VLMModel:
 
         if model_name == "gpt-4.1":
             from gpt4p1 import GPT4o
-            self.model = Ichat_GPT4o(model="gpt-4.1")
+            self.model = GPT4o(api_key=os.getenv("OPENAI_API_KEY"), model_name="gpt-4.1-2025-04-14")
         else:
             raise ValueError(f"Unsupported VLM model: {model_name}")
         
