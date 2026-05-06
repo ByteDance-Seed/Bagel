@@ -7,6 +7,8 @@ import os
 import torch
 import torch.distributed as dist
 import torch.distributed.fsdp._traversal_utils as traversal_utils
+from torch import nn
+
 from torch.distributed.device_mesh import init_device_mesh
 from torch.distributed.fsdp import (
     CPUOffload,
@@ -16,7 +18,14 @@ from torch.distributed.fsdp import (
     ShardingStrategy,
     FullStateDictConfig,
     StateDictType,
+    # FSDP v2 api below
+    fully_shard,
+    register_fsdp_forward_method,
+    MixedPrecisionPolicy,
+    CPUOffloadPolicy,
+    OffloadPolicy,
 )
+from torch.distributed.tensor import DeviceMesh, distribute_tensor 
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 from safetensors.torch import load_file, save_file
 
@@ -82,6 +91,53 @@ def fsdp_wrapper(original_model, fsdp_config, ignored_modules=[]):
         device_mesh=device_mesh,
     )
 
+def fsdp_v2_shard(model, fsdp_config, cpu_offload=False):
+    """
+    Initializes and shards a model using FSDP v2 with a comprehensive bottom-up strategy.
+    """
+    # 1. Boilerplate: Setup device mesh and policies
+    if fsdp_config.sharding_strategy == "HYBRID_SHARD":
+        device_mesh = init_device_mesh(
+            "cuda",
+            mesh_shape=(fsdp_config.num_replicate, fsdp_config.num_shard),
+            mesh_dim_names=("replicate", "shard")
+        )
+    else:
+        device_mesh = DeviceMesh("cuda", torch.arange(dist.get_world_size()))
+
+    mp_policy = MixedPrecisionPolicy(
+        param_dtype=torch.bfloat16,
+        reduce_dtype=torch.bfloat16,
+        # output_dtype=torch.bfloat16,
+    )
+    offload_policy = CPUOffloadPolicy(pin_memory=True) if cpu_offload else OffloadPolicy()
+
+    # 3. Explicit Bottom-Up Sharding: Wrap every module with parameters    
+    for layer in model.language_model.model.layers:
+        # Shard each MoT layer
+        fully_shard(layer, mesh=device_mesh, mp_policy=mp_policy, offload_policy=offload_policy)
+        # Register forward methods for fsdp v2 to recongnize dynamic functions that's not named "forward"
+        register_fsdp_forward_method(layer, "forward_train")
+        register_fsdp_forward_method(layer, "forward_inference")
+
+    # (Optional) Shard the Bagel-specific visual generation modules
+    fully_shard(model.time_embedder, mesh=device_mesh, mp_policy=mp_policy, offload_policy=offload_policy)
+    fully_shard(model.latent_pos_embed, mesh=device_mesh, mp_policy=mp_policy, offload_policy=offload_policy)
+
+    fully_shard(
+        model, 
+        mesh=device_mesh, 
+        mp_policy=mp_policy, 
+        offload_policy=offload_policy, 
+    )
+    # Register forward methods for fsdp v2 to recongnize dynamic functions that's not named "forward"
+    register_fsdp_forward_method(model, "forward_cache_update_text")
+    register_fsdp_forward_method(model, "forward_cache_update_vit")
+    register_fsdp_forward_method(model, "forward_cache_update_vae")
+    register_fsdp_forward_method(model, "generate_image")
+    register_fsdp_forward_method(model, "_forward_flow")
+
+    return model
 
 class FSDPCheckpoint:
     @staticmethod
@@ -184,6 +240,92 @@ class FSDPCheckpoint:
         return model, ema_model
 
     @staticmethod
+    def try_load_ckpt_fsdp_v2(resume_from, logger, model, ema_model=None, resume_from_ema=False):
+        """The FSDP v2 version of DCP checkpoint loading that largely replicate existing try_load_ckpt()"""
+        device = dist.get_rank() % torch.cuda.device_count()
+        if resume_from is not None and os.path.exists(resume_from):
+            logger.info(f"Loading checkpoint from {resume_from}.")
+            if resume_from_ema:
+                model_state_dict_path = os.path.join(resume_from, f"ema.safetensors")
+            else:
+                model_state_dict_path = os.path.join(resume_from, f"model.safetensors")
+            model_state_dict = load_file(model_state_dict_path, device="cpu")
+            # NOTE position embeds are fixed sinusoidal embeddings, so we can just pop it off,
+            # which makes it easier to adapt to different resolutions.
+            # model_state_dict.pop('latent_pos_embed.pos_embed')
+            # model_state_dict.pop('vit_pos_embed.pos_embed')
+
+            meta_sd_main = model.state_dict()
+            final_sd_main = {}
+            # 2. Load all parameters that exist in the checkpoint
+            for param_name, full_tensor in model_state_dict.items():
+                if param_name not in meta_sd_main:
+                    logger.warning(
+                        f"[Main Model] Checkpoint key '{param_name}' not found in model definition. Skipping."
+                    )
+                    continue
+                meta_param = meta_sd_main[param_name]
+                if hasattr(meta_param, "device_mesh"):  # It's a sharded DTensor
+                    sharded_tensor = distribute_tensor(
+                        full_tensor.to(meta_param.dtype),
+                        device_mesh=meta_param.device_mesh,
+                        placements=meta_param.placements,
+                    )
+                else:  # It's a replicated tensor
+                    sharded_tensor = full_tensor.to(
+                        device=device, dtype=meta_param.dtype
+                    )
+
+                final_sd_main[param_name] = nn.Parameter(sharded_tensor)
+
+            # msg = model.load_state_dict(model_state_dict, strict=False)
+            # because we popped pos_embed
+            msg = model.load_state_dict(final_sd_main, assign=True, strict=False)
+            logger.info(msg)
+            del model_state_dict
+
+            if ema_model is not None:
+                ema_state_dict_path = os.path.join(resume_from, f"ema.safetensors")
+                if not os.path.exists(ema_state_dict_path):
+                    logger.info(f"replicaing ema model from {model_state_dict_path}.")
+                    ema_state_dict_path = model_state_dict_path
+                ema_state_dict = load_file(ema_state_dict_path, device="cpu")
+                # NOTE position embeds are fixed sinusoidal embeddings, so we can just pop it off,
+                # which makes it easier to adapt to different resolutions.
+                # ema_state_dict.pop('latent_pos_embed.pos_embed')
+                # ema_state_dict.pop('vit_pos_embed.pos_embed')
+
+                meta_sharded_sd_ema = ema_model.state_dict()
+                sharded_sd_ema = {}
+                # 2. Load all parameters that exist in the checkpoint
+                for param_name, full_tensor in ema_state_dict.items():
+                    if param_name not in meta_sharded_sd_ema:
+                        logger.warning(
+                            f"[Main Model] Checkpoint key '{param_name}' not found in model definition. Skipping."
+                        )
+                        continue
+                    meta_param = meta_sharded_sd_ema[param_name]
+                    if hasattr(meta_param, "device_mesh"):  # It's a sharded DTensor
+                        sharded_tensor = distribute_tensor(
+                            full_tensor.to(meta_param.dtype),
+                            device_mesh=meta_param.device_mesh,
+                            placements=meta_param.placements,
+                        )
+                    else:  # It's a replicated tensor
+                        sharded_tensor = full_tensor.to(
+                            device=device, dtype=meta_param.dtype
+                        )
+
+                    sharded_sd_ema[param_name] = nn.Parameter(sharded_tensor)
+                # because we popped pos_embed
+                msg = ema_model.load_state_dict(sharded_sd_ema, assign=True, strict=False)
+                logger.info(msg)
+                del ema_state_dict
+        else:
+            logger.info(f"Training from scratch.")
+        return model, ema_model
+
+    @staticmethod
     def try_load_train_state(resume_from, optimizer, scheduler, fsdp_config):
         if resume_from is not None and os.path.exists(resume_from):
             if fsdp_config.sharding_strategy == "FULL_SHARD":
@@ -267,3 +409,23 @@ def fsdp_ema_update(ema_model, model, decay=0.9999):
 
     torch._foreach_mul_(ema_params, decay)
     torch._foreach_add_(ema_params, new_params, alpha=1 - decay)
+
+@torch.no_grad()
+def ema_step_fsdp_v2(model, ema_model, decay):
+    """
+    Update the exponential moving average (EMA) model's parameters.
+
+    This function iterates through the parameters of the main model and EMA model,
+    applying the EMA update rule in-place to the EMA model's parameters. It is
+    designed to work with FSDP v2 by handling mixed DTensor and regular Tensor
+    types, which would cause errors with torch._foreach operations.
+    """
+    main_params = model.parameters()
+    ema_params = ema_model.parameters()
+
+    for p_ema, p_main in zip(ema_params, main_params):
+        # Only update the EMA for parameters that are being trained
+        if p_main.requires_grad:
+            # The EMA update rule: p_ema = decay * p_ema + (1 - decay) * p_main
+            # This is performed in-place on the EMA parameter's data.
+            p_ema.data.mul_(decay).add_(p_main.data, alpha=1 - decay)
