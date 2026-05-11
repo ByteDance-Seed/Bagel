@@ -122,6 +122,7 @@ class Bagel(PreTrainedModel):
         packed_vae_token_indexes: Optional[torch.LongTensor] = None,
         packed_timesteps: Optional[torch.LongTensor] = None,
         mse_loss_indexes: Optional[torch.BoolTensor] = None,
+        return_images = False
     ) -> torch.Tensor:
         """
         Args:
@@ -195,6 +196,9 @@ class Bagel(PreTrainedModel):
             latent_token_pos_emb = self.latent_pos_embed(packed_latent_position_ids)
             packed_latent = self.vae2llm(packed_latent) + packed_timestep_embeds + latent_token_pos_emb
             packed_sequence[packed_vae_token_indexes] = packed_latent
+            
+            
+        
 
         extra_inputs = {}
         if self.use_moe:
@@ -220,13 +224,45 @@ class Bagel(PreTrainedModel):
             target = noise - packed_latent_clean # NOTE: v_t=dx_t/dt=x_1-x_0, pointing from data to noise
             has_mse = packed_timesteps > 0
             mse = (packed_mse_preds - target[has_mse]) ** 2
+            if return_images:
+                with torch.no_grad():
+                    pred_latent = packed_latent_clean.clone()
 
+                    pred_latent[has_mse] = (
+                        packed_latent_clean[has_mse]
+                        + (noise[has_mse] - packed_mse_preds)
+                    )
+        
+                    latents = []
+                    start = 0
+                    p = self.latent_patch_size
+                    
+                    print('patchified_vae_latent_shapes is: ',patchified_vae_latent_shapes)
+
+                    for (h, w) in patchified_vae_latent_shapes:
+                        n = h * w
+                        latent = pred_latent[start:start+n]
+                        latent = latent.reshape(h, w, p, p, self.latent_channel)
+                        latent = torch.einsum("hwpqc->chpwq", latent)
+                        latent = latent.reshape(
+                            self.latent_channel, h * p, w * p
+                        )
+                        latents.append(latent)
+                        start += n
+
+                    # VAE decode
+                    images = torch.stack(latents)  
+            else:
+                images = None
         ce = None
         if ce_loss_indexes is not None:
             packed_ce_preds = self.language_model.lm_head(last_hidden_state[ce_loss_indexes])
             ce = F.cross_entropy(packed_ce_preds, packed_label_ids, reduction="none")
+            
+            
+        
 
-        return dict(mse=mse, ce=ce)
+        return dict(mse=mse, ce=ce),images
 
 
     def prepare_prompts(self, curr_kvlens, curr_rope, prompts, tokenizer, new_token_ids):

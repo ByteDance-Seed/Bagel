@@ -160,8 +160,11 @@ class FSDPCheckpoint:
             model_state_dict = load_file(model_state_dict_path, device="cpu")
             # NOTE position embeds are fixed sinusoidal embeddings, so we can just pop it off,
             # which makes it easier to adapt to different resolutions.
-            model_state_dict.pop('latent_pos_embed.pos_embed')
-            model_state_dict.pop('vit_pos_embed.pos_embed')
+            try:
+                model_state_dict.pop('latent_pos_embed.pos_embed')
+                model_state_dict.pop('vit_pos_embed.pos_embed')
+            except:
+                print("Loading the model without latent_pos_embed and vit_pos_embed")
             msg = model.load_state_dict(model_state_dict, strict=False)
             logger.info(msg)
             del model_state_dict
@@ -174,8 +177,11 @@ class FSDPCheckpoint:
                 ema_state_dict = load_file(ema_state_dict_path, device="cpu")
                 # NOTE position embeds are fixed sinusoidal embeddings, so we can just pop it off,
                 # which makes it easier to adapt to different resolutions.
-                ema_state_dict.pop('latent_pos_embed.pos_embed')
-                ema_state_dict.pop('vit_pos_embed.pos_embed')
+                try:
+                    ema_state_dict.pop('latent_pos_embed.pos_embed')
+                    ema_state_dict.pop('vit_pos_embed.pos_embed')
+                except:
+                    print("Loading the ema  without latent_pos_embed and vit_pos_embed")
                 msg = ema_model.load_state_dict(ema_state_dict, strict=False)
                 logger.info(msg)
                 del ema_state_dict

@@ -5,7 +5,7 @@ import pyarrow.parquet as pq
 
 from ..distributed_iterable_dataset import DistributedIterableDataset
 from ..parquet_utils import get_parquet_data_paths, init_arrow_pf_fs
-
+import json
 
 class InterleavedBaseIterableDataset(DistributedIterableDataset):
 
@@ -209,4 +209,89 @@ class ParquetStandardIterableDataset(DistributedIterableDataset):
 
                     row_start_id = 0
             global_row_group_start_id = 0
+            print(f"{self.dataset_name} repeat in rank-{self.local_rank} worker-{worker_id}")
+
+
+class JsonStandardIterableDataset(DistributedIterableDataset):
+    def __init__(
+        self, dataset_name, transform, tokenizer, vit_transform, 
+        jsonl_path_list, data_dir_list, num_used_data,
+        local_rank=0, world_size=1, num_workers=8, data_status=None,
+        shuffle_lines=False, shuffle_seed=0,
+    ):
+        super().__init__(dataset_name, local_rank, world_size, num_workers)
+        self.transform = transform
+        self.vit_transform = vit_transform
+        self.tokenizer = tokenizer
+        self.data_status = data_status
+        self.data_paths = self.get_data_paths(
+            jsonl_path_list,
+            data_dir_list, 
+            num_used_data,
+            shuffle_lines, 
+            shuffle_seed,
+        )
+        self.set_epoch()
+
+    def get_data_paths(
+        self, 
+        jsonl_path_list, 
+        data_dir_list, 
+        num_used_data, 
+        shuffle_lines, 
+        shuffle_seed,
+    ):
+        data_paths = []
+        for jsonl_path, image_dir, num_data_point in zip(
+            jsonl_path_list, data_dir_list, num_used_data
+        ):
+            with open(jsonl_path, 'r') as f:
+                raw_data = f.readlines()
+            if shuffle_lines:
+                self.rng.seed(shuffle_seed)
+                self.rng.shuffle(raw_data)
+            raw_data = raw_data[:num_data_point]
+            data_paths.extend([(json_data, image_dir) for json_data in raw_data])
+        return data_paths
+
+    def parse_row(self, row):
+        raise NotImplementedError
+
+    def __iter__(self):
+        data_paths_per_worker, worker_id = self.get_data_paths_per_worker()
+        if self.data_status is not None:
+            row_start_id = self.data_status[worker_id] + 1
+        else:
+            row_start_id = 0
+        transform_stride = self.transform.stride
+
+        print(
+            f"rank-{self.local_rank} worker-{worker_id} dataset-{self.dataset_name}: "
+            f"resuming data at row#{row_start_id}"
+        )
+        
+        while True:
+            data_paths_per_worker_ = data_paths_per_worker[row_start_id:]
+            for row_idx, (json_data, image_dir) in enumerate(data_paths_per_worker_, start=row_start_id):
+
+                try:
+                    data_item = json.loads(json_data)
+                    data = self.parse_row(data_item, image_dir)
+                    
+                    if not data or len(data) == 0:
+                        continue
+                    
+                    # 补充 meta 信息，方便 debug
+                    data['data_indexes'] = {
+                        "data_indexes": row_idx,
+                        "worker_id": worker_id,
+                        "dataset_name": self.dataset_name,
+                    }                    
+                except Exception as e:
+                    print(f"Error processing row {row_idx}: {e}")
+                    continue
+
+                yield data
+
+            row_start_id = 0
             print(f"{self.dataset_name} repeat in rank-{self.local_rank} worker-{worker_id}")

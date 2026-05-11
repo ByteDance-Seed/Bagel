@@ -24,9 +24,9 @@ from accelerate.utils import BnbQuantizationConfig, load_and_quantize_model
 
 parser = argparse.ArgumentParser() 
 parser.add_argument("--server_name", type=str, default="127.0.0.1")
-parser.add_argument("--server_port", type=int, default=7860)
+parser.add_argument("--server_port", type=int, default=8000)
 parser.add_argument("--share", action="store_true")
-parser.add_argument("--model_path", type=str, default="models/BAGEL-7B-MoT")
+parser.add_argument("--model_path", type=str, default="/mnt/shared-storage-user/gpfs2-shared-public/huggingface/zskj-hub/models--ByteDance-Seed-BAGEL-7B-MoT")
 parser.add_argument("--mode", type=int, default=1)
 parser.add_argument("--zh", action="store_true")
 args = parser.parse_args()

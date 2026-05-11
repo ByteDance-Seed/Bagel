@@ -210,6 +210,7 @@ class InterleaveInferencer:
         input_lists: List[Union[str, Image.Image]],
         think=False,
         understanding_output=False,
+        use_vit_cond=True,
 
         max_think_token_n=1000,
         do_sample=False,
@@ -238,7 +239,6 @@ class InterleaveInferencer:
                     system_prompt = GEN_THINK_SYSTEM_PROMPT
                 gen_context = self.update_context_text(system_prompt, gen_context)
                 cfg_img_context = self.update_context_text(system_prompt, cfg_img_context)
-
             for input_term in input_lists:
                 if isinstance(input_term, str):
                     cfg_text_context = deepcopy(gen_context)
@@ -247,7 +247,12 @@ class InterleaveInferencer:
 
                 elif isinstance(input_term, Image.Image):
                     input_term = self.vae_transform.resize_transform(pil_img2rgb(input_term))
-                    gen_context = self.update_context_image(input_term, gen_context, vae=not understanding_output)
+                    gen_context = self.update_context_image(
+                        input_term,
+                        gen_context,
+                        vae=not understanding_output,
+                        vit=use_vit_cond,
+                    )
 
                     image_shapes = input_term.size[::-1]
                     cfg_text_context = deepcopy(gen_context)
@@ -287,19 +292,19 @@ class InterleaveInferencer:
     
     def __call__(
         self, 
-        image: Optional[Image.Image] = None, 
+        image_list = None, 
         text: Optional[str] = None, 
         **kargs
     ) -> Dict[str, Any]:
         output_dict = {'image': None, 'text': None}
 
-        if image is None and text is None:
+        if image_list is None and text is None:
             print('Please provide at least one input: either an image or text.')
             return output_dict
 
         input_list = []
-        if image is not None:
-            input_list.append(image)
+        if image_list is not None:
+            input_list.extend(image_list)
         if text is not None:
             input_list.append(text)
 

@@ -37,7 +37,45 @@ from train.fsdp_utils import (
     FSDPCheckpoint, FSDPConfig, grad_checkpoint_check_fn, fsdp_wrapper, 
     fsdp_ema_setup, fsdp_ema_update,
 )
+from torchvision.utils import save_image
 
+
+def _to_hashable_index(index_obj):
+    if isinstance(index_obj, list):
+        return tuple(_to_hashable_index(item) for item in index_obj)
+    if isinstance(index_obj, tuple):
+        return tuple(_to_hashable_index(item) for item in index_obj)
+    if isinstance(index_obj, dict):
+        return tuple(sorted((k, _to_hashable_index(v)) for k, v in index_obj.items()))
+    return index_obj
+
+
+def save_images_png(
+    images: torch.Tensor,
+    save_dir: str,
+    prefix: str = "sample",
+    value_range: tuple = (-1, 1),
+):
+    """
+    Save a batch of images as PNG using torchvision.
+
+    Args:
+        images: Tensor (B, C, H, W)
+        save_dir: directory to save png files
+        prefix: filename prefix
+        value_range: value range of images (default assumes VAE output)
+    """
+    os.makedirs(save_dir, exist_ok=True)
+
+    images = images.detach().cpu()
+
+    for i in range(images.shape[0]):
+        save_image(
+            images[i],
+            os.path.join(save_dir, f"{prefix}_{i:03d}.png"),
+            normalize=True,
+            value_range=value_range,
+        )
 
 def count_parameters(module: torch.nn.Module) -> int:
     return sum(p.numel() for p in module.parameters())
@@ -611,6 +649,8 @@ def main():
     # Setup packed dataloader
     with open(data_args.dataset_config_file, "r") as stream:
         dataset_meta = yaml.safe_load(stream)
+
+        print("dataset_meta is",dataset_meta)
     dataset_config = DataConfig(grouped_datasets=dataset_meta)
     if training_args.visual_und:
         dataset_config.vit_patch_size = model_args.vit_patch_size
@@ -654,6 +694,9 @@ def main():
         vae_model.to(device).eval()
     fsdp_model.train()
     ema_model.eval()
+    
+    
+    current_visualization_freq = 10000000
 
     # train loop
     start_time = time()
@@ -662,6 +705,17 @@ def main():
     total_norm = torch.tensor(0.0, device=device)
     token_window = 0.0
     seqlen_square_window = 0.0
+    cumulative_samples = 0.0
+    cumulative_tokens = 0.0
+
+    dataset_name_order = [dataset.dataset_name for dataset in train_dataset.grouped_datasets]
+    dataset_expected_local = {
+        dataset.dataset_name: len(getattr(dataset, "data_paths_per_rank", []))
+        for dataset in train_dataset.grouped_datasets
+    }
+    dataset_unique_seen = {name: set() for name in dataset_name_order}
+    dataset_all_rank_pass_announced = set()
+
     dense_token_factor, attn_factor = qwen2_flop_coefficients(model.language_model.config)
     for micro_step, data in enumerate(train_loader):
         curr_step = train_step + micro_step // training_args.gradient_accumulation_steps
@@ -674,6 +728,21 @@ def main():
         tokens_tensor = torch.tensor(float(data['sequence_length']), device=device)
         dist.all_reduce(tokens_tensor, op=dist.ReduceOp.SUM)
         token_window += tokens_tensor.item()
+        cumulative_tokens += tokens_tensor.item()
+
+        global_samples_tensor = torch.tensor(float(len(data['sample_lens'])), device=device)
+        dist.all_reduce(global_samples_tensor, op=dist.ReduceOp.SUM)
+        cumulative_samples += global_samples_tensor.item()
+
+        if data_indexes is not None:
+            for item in data_indexes:
+                dataset_name = item['dataset_name']
+                if dataset_name not in dataset_unique_seen:
+                    continue
+                data_index = _to_hashable_index(item['data_indexes'])
+                worker_id = item['worker_id']
+                dataset_unique_seen[dataset_name].add((worker_id, data_index))
+
         if data['sample_lens']:
             sample_lens_tensor = torch.tensor(data['sample_lens'], dtype=torch.float32, device=device)
             sample_square = torch.dot(sample_lens_tensor, sample_lens_tensor)
@@ -684,8 +753,9 @@ def main():
             if training_args.visual_gen:
                 with torch.no_grad():
                     data['padded_latent'] = vae_model.encode(data.pop('padded_images'))
+            data['return_images'] = (curr_step+1) % current_visualization_freq == 0
             try:
-                loss_dict = fsdp_model(**data)
+                loss_dict, images = fsdp_model(**data)
             except RuntimeError as e:
                 if "out of memory" in str(e).lower():
                     logger.error(f"CUDA OOM at step {curr_step}: {e}")
@@ -759,6 +829,36 @@ def main():
                 message += f"Train Loss {key}: {avg_loss:.4f}, "
                 wandb_log[key] = avg_loss
             message += f"Train Steps/Sec: {steps_per_sec:.2f}, Tokens/Sec: {tokens_per_sec/1000:.2f}k, MFU: {mfu_value*100:.1f}%, "
+            message += f"CumSamples: {int(cumulative_samples)}, CumTokens: {int(cumulative_tokens)}, "
+
+            coverage_chunks = []
+            for dataset_name in dataset_name_order:
+                expected_local = dataset_expected_local.get(dataset_name, 0)
+                seen_local = len(dataset_unique_seen.get(dataset_name, []))
+                if expected_local > 0:
+                    coverage_ratio = seen_local / expected_local
+                else:
+                    coverage_ratio = 0.0
+                coverage_chunks.append(
+                    f"{dataset_name}:{seen_local}/{expected_local}({coverage_ratio*100:.1f}%)"
+                )
+                wandb_log[f"coverage_local_{dataset_name}"] = coverage_ratio
+
+                if expected_local > 0 and dataset_name not in dataset_all_rank_pass_announced:
+                    local_done = torch.tensor(
+                        1 if seen_local >= expected_local else 0, device=device
+                    )
+                    dist.all_reduce(local_done, op=dist.ReduceOp.MIN)
+                    if local_done.item() == 1:
+                        dataset_all_rank_pass_announced.add(dataset_name)
+                        if dist.get_rank() == 0:
+                            logger.info(
+                                f"[DataProgress] dataset={dataset_name} "
+                                f"completed >=1 full local-shard pass on all ranks at step={curr_step}."
+                            )
+
+            if len(coverage_chunks) > 0:
+                message += "LocalCoverage: " + " | ".join(coverage_chunks) + ", "
             logger.info(message)
             if dist.get_rank() == 0:
                 print(message, flush=True)
@@ -772,6 +872,8 @@ def main():
             wandb_log['tokens_per_step'] = tokens_per_step
             wandb_log['actual_tflops'] = actual_tflops
             wandb_log['mfu'] = mfu_value
+            wandb_log['cum_samples'] = cumulative_samples
+            wandb_log['cum_tokens'] = cumulative_tokens
 
             mem_allocated = torch.tensor(torch.cuda.max_memory_allocated() / 1024**2, device=device)
             dist.all_reduce(mem_allocated, op=dist.ReduceOp.MAX)
@@ -793,6 +895,17 @@ def main():
                 data_status[item['dataset_name']] = {}
             data_status[item['dataset_name']][item['worker_id']] = item['data_indexes']
 
+        if (curr_step+1) % current_visualization_freq == 0 and dist.get_rank() == 0: 
+
+            if images is not None:
+                with torch.no_grad():
+                    draw_images = vae_model.decode(images.float())
+                save_images_png(
+                    draw_images,           # 只存前 4 张
+                    save_dir="vis/",
+                    prefix=f"step_{curr_step}",
+                )
+            
         if curr_step > 0 and curr_step % training_args.save_every == 0:
             # Clear caches and ensure all CUDA operations complete before checkpoint
             torch.cuda.empty_cache()

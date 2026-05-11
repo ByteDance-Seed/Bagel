@@ -1,0 +1,17 @@
+si:
+  dataset_names:
+  - scannetpp
+  image_transform_args:
+    image_stride: 16
+    max_image_size: 1024
+    min_image_size: 512
+  vit_image_transform_args:
+    image_stride: 14
+    max_image_size: 518
+    min_image_size: 224
+  is_mandatory: false
+  shuffle_lines: True
+  shuffle_seed: 0
+  num_used_data:
+  - 1333
+  weight: 1
