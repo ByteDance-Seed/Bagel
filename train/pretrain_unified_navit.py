@@ -622,6 +622,42 @@ def main():
         dataset_config.text_cond_dropout_prob = model_args.text_cond_dropout_prob
         dataset_config.vae_cond_dropout_prob = model_args.vae_cond_dropout_prob
         dataset_config.vit_cond_dropout_prob = model_args.vit_cond_dropout_prob
+
+    # Validate that dataset image sizes are compatible with the position embedding tables.
+    if dist.get_rank() == 0:
+        for ds_name, ds_meta in dataset_meta.items():
+            if training_args.visual_gen:
+                vae_max_px = model_args.max_latent_size * dataset_config.vae_image_downsample
+                img_args = ds_meta.get("image_transform_args", {})
+                cfg_max = img_args.get("max_image_size", 0)
+                if cfg_max > vae_max_px:
+                    raise ValueError(
+                        f"Dataset '{ds_name}': image_transform_args.max_image_size={cfg_max} "
+                        f"exceeds max_latent_size ({model_args.max_latent_size}) × "
+                        f"vae_image_downsample ({dataset_config.vae_image_downsample}) = {vae_max_px}. "
+                        f"Lower max_image_size or increase --max_latent_size."
+                    )
+            if training_args.visual_und:
+                vit_max_px = model_args.vit_max_num_patch_per_side * model_args.vit_patch_size
+                # Only apply VIT check to datasets that actually feed the VIT encoder.
+                # Pure VAE datasets (e.g. t2i_pretrain) have no VIT path — falling back
+                # to image_transform_args would produce a false-positive ValueError.
+                _VLM_DATASET_TYPES = {"vlm_sft"}
+                if "vit_image_transform_args" in ds_meta:
+                    vit_args = ds_meta["vit_image_transform_args"]
+                elif ds_name in _VLM_DATASET_TYPES:
+                    vit_args = ds_meta.get("image_transform_args", {})
+                else:
+                    vit_args = {}
+                cfg_vit_max = vit_args.get("max_image_size", 0)
+                if cfg_vit_max > vit_max_px:
+                    raise ValueError(
+                        f"Dataset '{ds_name}': VIT max_image_size={cfg_vit_max} "
+                        f"exceeds vit_max_num_patch_per_side ({model_args.vit_max_num_patch_per_side}) × "
+                        f"vit_patch_size ({model_args.vit_patch_size}) = {vit_max_px}. "
+                        f"Lower max_image_size or increase --vit_max_num_patch_per_side."
+                    )
+
     train_dataset = PackedDataset(
         dataset_config,
         tokenizer=tokenizer,
