@@ -772,7 +772,7 @@ class Qwen2MoTDecoderLayer(nn.Module):
         
         enable_taylorseer = getattr(self, 'enable_taylorseer', False)
 
-        if enable_taylorseer and self.current['type'] == 'full':
+        if enable_taylorseer and self.current['type'] == 'full' and self.current['layer'] == 27:
             self.current['module'] = 'total'
             taylor_cache_init(cache_dic=self.cache_dic, current=self.current)
 
@@ -821,7 +821,7 @@ class Qwen2MoTDecoderLayer(nn.Module):
 
             packed_query_sequence = residual + packed_query_sequence
         
-        if enable_taylorseer:
+        if enable_taylorseer and self.current['layer'] == 27:
             if self.current['type'] == 'full':
                 derivative_approximation(cache_dic=self.cache_dic, current=self.current, feature=packed_query_sequence)
             elif self.current['type'] == 'Taylor':
