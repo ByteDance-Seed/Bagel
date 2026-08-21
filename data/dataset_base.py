@@ -289,6 +289,8 @@ class PackedDataset(torch.utils.data.IterableDataset):
                     data = self.to_tensor(sequence_status)
                     data['batch_data_indexes'] = batch_data_indexes
                     yield data
+                    if sample_from_buffer:
+                        buffer.append(sample)
                     sequence_status = self.set_sequence_status()
                     batch_data_indexes = []
                 continue
