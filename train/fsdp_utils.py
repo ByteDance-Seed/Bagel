@@ -45,11 +45,41 @@ class FSDPConfig:
         self.num_shard = num_shard
 
 
+def resolve_hybrid_mesh_shape(num_replicate, num_shard, world_size):
+    if world_size <= 0:
+        raise ValueError(f"world_size must be positive, got {world_size}")
+    if num_shard <= 0:
+        raise ValueError(f"num_shard must be positive, got {num_shard}")
+    if world_size % num_shard != 0:
+        raise ValueError(
+            "FSDP HYBRID_SHARD requires world_size to be divisible by num_shard, "
+            f"but got world_size={world_size} and num_shard={num_shard}"
+        )
+
+    inferred_num_replicate = world_size // num_shard
+    if num_replicate is None:
+        num_replicate = inferred_num_replicate
+    elif num_replicate <= 0:
+        raise ValueError(f"num_replicate must be positive, got {num_replicate}")
+    elif num_replicate != inferred_num_replicate:
+        raise ValueError(
+            "FSDP HYBRID_SHARD requires num_replicate * num_shard to equal world_size, "
+            f"but got {num_replicate} * {num_shard} != {world_size}"
+        )
+
+    return num_replicate, num_shard
+
+
 def fsdp_wrapper(original_model, fsdp_config, ignored_modules=[]):
     if fsdp_config.sharding_strategy == 'HYBRID_SHARD':
+        mesh_shape = resolve_hybrid_mesh_shape(
+            fsdp_config.num_replicate,
+            fsdp_config.num_shard,
+            dist.get_world_size(),
+        )
         device_mesh = init_device_mesh(
             "cuda", 
-            mesh_shape=(fsdp_config.num_replicate, fsdp_config.num_shard),
+            mesh_shape=mesh_shape,
             mesh_dim_names=("replicate", "shard")
         )
     else:
