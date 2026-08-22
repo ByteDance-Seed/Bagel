@@ -357,9 +357,11 @@ class TrainingArguments:
     )
 
     # --- distributed training / FSDP ---
-    num_replicate: int = field(
-        default=1,
-        metadata={"help": "Number of model replicas per GPU rank for tensor parallelism."}
+    num_replicate: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": "Number of FSDP replicas for HYBRID_SHARD; inferred from world size by default."
+        }
     )
     num_shard: int = field(
         default=8,
