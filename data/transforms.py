@@ -1,6 +1,7 @@
 # Copyright 2025 Bytedance Ltd. and/or its affiliates.
 # SPDX-License-Identifier: Apache-2.0
 
+import math
 import random
 from PIL import Image
 
@@ -76,7 +77,10 @@ class MaxLongEdgeMinShortEdgeResize(torch.nn.Module):
 
         # Ensure the number of pixels does not exceed max_pixels
         if new_width * new_height > self.max_pixels / img_num:
-            scale = self.max_pixels / img_num / (new_width * new_height)
+            # `_apply_scale` multiplies each edge by `scale`, so `scale` must be a
+            # per-edge (linear) factor. The pixel budget is an area, hence the sqrt:
+            # without it the area would shrink by (area_ratio)**2 instead of area_ratio.
+            scale = math.sqrt(self.max_pixels / img_num / (new_width * new_height))
             new_width, new_height = self._apply_scale(new_width, new_height, scale)
 
         # Ensure longest edge does not exceed max_size
