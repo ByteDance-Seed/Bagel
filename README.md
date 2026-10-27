@@ -33,12 +33,6 @@
         alt="BAGEL Model"
     />
   </a>
-  <a href="https://discord.gg/eXQNFhWe">
-    <img
-      src="https://img.shields.io/badge/BAGEL-Discord-5865F2?logo=discord&logoColor=purple"
-      alt="BAGEL Discord"
-    />
-  </a>
   <a href="mailto:bagel@bytedance.com">
     <img
       src="https://img.shields.io/badge/BAGEL-Email-D14836?logo=gmail&logoColor=red"
@@ -88,7 +82,7 @@ We sincerely thank all contributors from the open community for their valuable s
 
 
 ## 📮 Notice
-**Call for Bad Cases:** If you have encountered any cases where the model performs poorly, we would greatly appreciate it if you could share them in the [issue#11](https://github.com/ByteDance-Seed/Bagel/issues/11) or [Discord](https://discord.gg/Z836xxzy).
+**Call for Bad Cases:** If you have encountered any cases where the model performs poorly, we would greatly appreciate it if you could share them in [issue #11](https://github.com/ByteDance-Seed/Bagel/issues/11).
 
 **About Inference Hyperparameters:**
 - **`cfg_text_scale`:** Controls how strongly the model follows the text prompt. `1.0` disables text guidance. Typical range: `4.0–8.0`.
